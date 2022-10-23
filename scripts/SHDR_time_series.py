@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument('--min_obs', type=int, default=10)
     
     # Misc
-    parser.add_argument('--results_folder', type=str, default='results')
+    parser.add_argument('--results_folder', type=str, default='data/SHDR_fit')
     parser.add_argument('--output_file', type=str, default=None)
     parser.add_argument('--tol', type=float, default=0.0025)
     

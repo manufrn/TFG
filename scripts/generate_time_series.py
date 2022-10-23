@@ -7,9 +7,9 @@ import h5py
 n = 3000 # max number of meassures in time series. for debugging purposes
 
 # paths
-data_path = '../data/thermistor_chain/AGL_Abril_2019/SBE56'
-output_path = '../data/thermistor_chain/AGL_Abril_2019/Time_series'
-output_fn = 'Time_Series_new_method.h5'
+data_path = '../data/raw/thermistor_chain/AGL_1/SBE56'
+output_path = '../data/time_series/'
+output_fn = 'AGL_1_SB56_3000.h5'
 
 
 lat, lon = 43.789, 3.782 # latitude and longitude of AGL buoy
@@ -46,24 +46,29 @@ raw_data = [loadmat(file) for file in mat_files]
 
 # find shortest time series for a single thermistor and get index
 max_idx = min(len(thermistor['tem']) for thermistor in raw_data)
+max_idx = n if n < max_idx else max_idx
 
 # extract temperature and dates in a 2D numpy array each
 temp = np.vstack([np.squeeze(thermistor['tem'])[:max_idx] for thermistor in raw_data])
 date = np.vstack([np.squeeze(thermistor['dates'])[:max_idx] for thermistor in raw_data])
 
-
+# check that all thermistor dates are synced
 if (date[1:, :] == date[:-1, :]).all():
-    print('All thermistor are correctly synced for the whole series.')
     date = date[0, :] # we dont need dates to be a 2d array 
 
 datenum_vec = np.vectorize(datenum_to_epoch)
 date = datenum_vec(date)
 
 file = Path(output_path) / Path(output_fn)
+if file.is_file():
+    print('Output file already exists. Overwriting.')
+
 with h5py.File(file, 'w') as f:
     temperature = f.create_dataset('temperature', data=temp, dtype='float64')
     pressure = f.create_dataset('pressure', data=pres, dtype='float64')
     date = f.create_dataset('date', data=date, dtype='float64')
     lat = f.create_dataset('lat', data=lat, dtype='float64')
     lon = f.create_dataset('lon', data=lon, dtype='float64')
+
+print(f"{file} generated succesfully")
 
