@@ -9,12 +9,17 @@ import numpy as np
 import h5py
 import scipy.io
 from scipy.optimize import OptimizeResult
-import matplotlib.pyplot as plt
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('data_file', help='File containing data to be fitted')
+    parser.add_argument('datafile', help='File containing data to be fitted')
+
+    # Assist fit
+    parser.add_argument('--reference_fit', type=str, default=None, 
+                        help='File containing results of SHDR fit \
+                        for a reference time series')
 
     # Genetics
     parser.add_argument('--cross_probability', type=float, default=0.5)
@@ -25,6 +30,7 @@ def parse_args():
     # Fit
     parser.add_argument('--max_b2_c2', type=float, default=0.5)
     parser.add_argument('--exp_limit', type=float, default=100)
+    parser.add_argument('--bias_parametres', type=tuple, default=(1, 1))
 
     # Physical
     parser.add_argument('--min_depth', type=float, default=100)
@@ -32,15 +38,16 @@ def parse_args():
     parser.add_argument('--min_obs', type=int, default=10)
     
     # Misc
-    parser.add_argument('--results_folder', type=str, default='data/SHDR_fit')
+    parser.add_argument('--results_folder', type=str, default='/home/manu/TFG_repo/data/SHDR_fit')
     parser.add_argument('--output_file', type=str, default=None)
     parser.add_argument('--tol', type=float, default=0.0025)
     
     return parser.parse_args()
 
+
 def extract_data_from_file(args, sal=False):
 
-    fn = args.data_file
+    fn = args.datafile
     # for .mat files
     if fn.endswith('.h5'):
         with h5py.File(fn, 'r') as data:
@@ -145,10 +152,12 @@ def fitness(individuals, z, y, args):
     fitness = np.sqrt(np.sum((y - fit_function(individuals, z, args))**2, axis=1) / len(y))
     return fitness
     
+
 def penalty_f(z, a, c, MLD):
     return a * np.exp(- (z - MLD)**2 / 2 / c**2)
 
-def modified_fitness(individuals, z, y, a, c, MLD, args):
+
+def modified_fitness(individuals, z, y, args, MLD, a, c,):
     ''' Modfied version to implement higher error weights to points in
     the MLD '''
     
@@ -161,12 +170,18 @@ def modified_fitness(individuals, z, y, a, c, MLD, args):
 
     return fitness
 
-def diferential_evolution(individuals, z, y, args):
+
+def diferential_evolution(individuals, z, y, args, delta_args=None):
     n = args.num_individuals
     lims_min, lims_max = get_fit_limits(z, y, args)
     n_var = np.size(lims_max)
     
-    present_fitns = fitness(individuals, z, y, args)
+    if delta_args == None:
+        present_fitns = fitness(individuals, z, y, args)
+
+    else:
+        present_fitns = modified_fitness(individuals, z, y, args, **delta_args)
+
     best_fit_loc = present_fitns.argmin()
     best_fit = individuals[best_fit_loc]
     
@@ -205,6 +220,7 @@ def diferential_evolution(individuals, z, y, args):
     result = OptimizeResult(x = best_fit, fun = present_fitns[best_fit_loc])
     return result
     
+
 def fit_profile(z, y, args):
     '''Parse and fit data from a single profile'''
     
@@ -222,7 +238,9 @@ def fit_profile(z, y, args):
 
     optimized_result = diferential_evolution(first_gen, z, y, args)
     
-    #### DELTA CODING SKIPPED ####
+    #### DELTA CODING ####
+    # TO-DO
+
     
     D1, b2, c2, b3, a2, a1 = optimized_result.x
     a3 = a1 - a2 
@@ -237,41 +255,57 @@ def save_results(lat, lon, dates, results, args):
     columns = ['D1', 'b2', 'c2', 'b3', 'a2', 'a1', 'a3', 'em']
 
     # Convert results list to pd.Dataframe and save as .csv
-    results_df = pd.DataFrame(results, columns=columns, dtype='float')
-    results_df.insert(0, 'Dates', dates[0])
+    results_df = pd.DataFrame(results, columns=columns)
+    results_df.insert(0, 'Dates', dates)
     results_df.insert(1, 'lat', lat)
     results_df.insert(2, 'lon', lon)
     
     if args.output_file is not None:
         output_file = args.output_file
     else:
-        output_file = '{}_fit.csv'.format(Path(args.data_file).stem)
+        output_file = '{}_fit.csv'.format(Path(args.datafile).stem)
         
     output_path = Path(args.results_folder) / output_file
 
-    # create save folder if non existent
-    folder = Path.cwd() / args.results_folder
-    folder.mkdir(parents=True, exist_ok=True)
-    
-    
-    results_df.to_csv(output_path, index=False)
+    results_df.to_csv(output_path, index=False, mode='w+')
 
-def main():
-    args = parse_args()
+
+def fit_time_series(args):
+
     t_0 = time.time()
+
     lat, lon, pres, temps, dates = extract_data_from_file(args)
-    print(pres) 
-    print(temps)
     pool_arguments = [[pres, temps[:, i], args] for i in range(len(dates))]
+
     print('Begining DE fit...')
+
     with mp.Pool(processes=mp.cpu_count()) as pool:
         results_fit = pool.starmap(fit_profile, tqdm.tqdm(pool_arguments,
                                                           total=len(pool_arguments)), chunksize=1)
     save_results(lat, lon, dates, results_fit, args)
     
-    
     print('Elapsed time: {:.2f} seconds'.format(time.time() - t_0))
-    
+
+def fit_with_reference(args):
+
+    lat, lon, pres, temps, dates = extract_data_from_file(args)
+
+    df_reference = pd.read_csv(args.reference_fit)
+
+    # check where referece == dates
+    idx = dates.searchsorted(df_reference['Dates'])
+
+
+def main():
+    args = parse_args() 
+
+    if args.reference_fit == None:
+        fit_time_series()
+
+    else:
+        fit_with_reference()
+
+
 if __name__ == '__main__':
     main()
     

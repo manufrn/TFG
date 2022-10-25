@@ -1,41 +1,77 @@
+import h5py
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-import pandas as pd
-from scipy.io import loadmat
-from numpy.fft import fft, fftfreq
-import os
-import sys
+from datetime import datetime
+from config import data_dir
 
-def import_data(file_name):
-    results_path = f'../results/{file_name}_R.csv'
-    df_fit = pd.read_csv(results_path)
-    time_series_path = f'../data/thermistor_chain/AGL_Abril_2019/Time_series/{file_name}.mat'
-    data = loadmat(time_series_path)
+def load_time_series(filename):
+    '''Load time series saved as filename in data_dir/time_series
+    '''
 
-    tems = data['tems']
-    pres = data['pres']
+    file_path = data_dir / 'time_series' / filename
+    with h5py.File(file_path, 'r') as f:
+        temperature = np.array(f['temperature'])
+        pressure = np.array(f['pressure'])
+        date = np.array(f['date'])
+        lat = np.array(f['lat'])
+        lon = np.array(f['lon'])
 
-    return tems, pres, df_fit
+    date = np.array(map(datetime.fromtimestamp, date))
 
-def fit_fun(z, df):
-    D1, b2, c2 = df['D1m'], df['b2m'], df['c2m']
-    b3, a2, a1 = df['b3m'], df['a2m'], df['a1m']
-    print('D1: {:.2f}, a1: {:.2f}, b3: {:.2E}, b2:{:.2E}, c2: {:.2E}'.format(D1, a1, b3, b2, c2))
+    return temperature, pressure, date, lat, lon
+
+    
+def load_SHDR_fit(filename):
+    '''Load  saved SHDR fit as filename in data_dir/SHDR_fit.
+    Returns data frame containing fit of time series.
+    '''
+
+    file_path = data_dir / 'SHDR_fit' / filename
+    df_fit = pd.read_csv(file_path)
+    df_fit['Dates'] = df_fit['Dates'].apply(lambda x: datetime.fromtimestamp(x))
+
+    return df_fit
+     
+
+def date_to_iloc(df, date):
+    try:
+        iloc = df[df['Dates'] == date].index[-1]
+    except:
+        closest = min(df['Dates'], key=lambda sub: abs(sub - date))
+        iloc = df[df['Dates'] == closest].index
+    return iloc
+
+
+
+def fit_function(z, df, loc):
+    '''Return value of idealized fit function for datapoint at loc. loc can be
+    integer pointing to position of datapoint or datetime object.
+    '''
+    
+    # check if inputed loc is datetime object and convert it to iloc
+    if type(loc) == 'datetime.datetime':
+        loc = date_to_iloc(df, loc)
+
+    fit = df.iloc[loc]
+    
+    D1, b2, c2 = fit['D1'], fit['b2'], fit['c2']
+    b3, a2, a1 = fit['b3'], fit['a2'], fit['a1']
+
+    # print('D1: {:.2f}, a1: {:.2f}, b3: {:.2E}, b2:{:.2E}, c2: {:.2E}'.format(D1, a1, b3, b2, c2))
 
     pos = np.where(z >= D1, 1.0, 0.0)  # check if z is above or bellow MLD
-    zaux = - (z - D1) *(b2 + (z - D1) *c2)
-    return a1 + pos *(b3 *(z - D1) + a2 *(np.exp(zaux) - 1.0))
+    zaux = - (z - D1) * (b2 + (z - D1) * c2)
+    return a1 + pos * (b3 * (z - D1) + a2 *(np.exp(zaux) - 1.0))
 
 
-def plot_fit_variable(df, variable, interval=None, save=False):
+def plot_fit_variable(df, variable, lims = [None, None], interval=None):
+    
+    dic = {'D1': 'MLD (m)', 'a1': 'SST (ºC)'}
+    var = df[variable][lims[0]:lims[1]:interval]
+    dates = df['Dates'][lims[0]:lims[1]:interval]
 
-    dic = {'D1m': 'MLD (m)', 'a1m': 'SST (ºC)'}
-    n = len(df[variable])
-    max_date = 737888.413299
-    idx = int(np.where(df['Dates'] == max_date)[0])
-    var = df[variable][:idx:interval]
-    dates = df['Dates'][:idx:interval]
     fig, ax = plt.subplots()
     ax.scatter(dates, var, s=8)
     ax.set_xlabel('Date')
@@ -47,40 +83,79 @@ def plot_fit_variable(df, variable, interval=None, save=False):
     plt.show()
 
 
-def plot_profile_fit(df, tems, pres, number):
-    temp = tems[:, number]
-    zz = np.linspace(0, 200, 300)
+def plot_profile_fit(df, temp, pres, loc):
 
-    fig, ax = plt.subplots(figsize=(5.2, 4.8))
-    ax.scatter(temp, pres, marker='o', fc='None', ec='tab:red')
-    ax.axhline(df.iloc[number, 3], c='grey', ls='--')
+    if type(loc) == 'datetime.datetime':
+        loc = date_to_iloc(df, loc)
+
+    zz = np.linspace(0, pres[-1] + 5, 300)
+
+    fig, ax = plt.subplots(figsize=(4, 4.6875))
+    ax.scatter(temp[:, loc], pres, marker='o', fc='None', ec='tab:red', s=22)
+    ax.axhline(df.iloc[loc, 3], c='grey', ls='--') # plot MLD
     ax.set_ylim(pres[-1] + 10, 0)
     ax.set_xlim(9.5, 18)
-
-    ax.plot(fit_fun(zz, df.iloc[number]), zz)
-    ax.set_xlabel('Temperatura (ºC)')
-    ax.set_ylabel('Profundidad (mb)')
-
+    ax.plot(fit_function(zz, df, loc), zz)
+    ax.set_xlabel('Temperature (ºC)')
+    ax.set_ylabel('Depth (mb)')
+    fig.tight_layout()
     plt.show()
 
 
-# DOESN'T WORK, DON'T RUN
-def compute_physical_parameters(file_name, df, alfa=0.05):
-    b2 = df['b2m']
-    c2 = df['c2m']
-    D = df['D1m']
+def fitness(df, y, z, loc):
+    ''' Get RMS for profile in loc at heightz 
+    ''' 
+    fitness = np.sqrt(np.sum((y[:, loc] - fit_function(z, df, loc))**2) / len(y[:, loc]))
+    print(fitness)
+    return fitness
+    
 
-    l = 2 *c2 /b2**2
-    Delta = -b2 /2 /c2 *(1 - (1 - 2 *l *np.log(alfa))**0.5)
+def plot_RMS_fit(df, temp, pres, loc):
+    
+    delta = temp[:, loc] - fit_function(pres, df, loc)
+    zz = np.linspace(0, pres[-1] + 5, 300)
+    fig, [ax1, ax2, ax3] = plt.subplots(1, 3, figsize = (7.5, 3.75))
+    
+    ax1.scatter(temp[:, loc], pres, marker='o', fc='None', ec='tab:red', s=22)
+    ax1.axhline(df.iloc[loc, 3], c='grey', ls='--') # plot MLD
+    ax1.set_ylim(pres[-1] + 10, 0)
+    ax1.set_xlim(9.5, 18)
+    ax1.plot(fit_function(zz, df, loc), zz)
+    ax1.set_xlabel('Temperature (ºC)')
+    ax1.set_ylabel('Depth (mb)')
+    
+    ax2.set_xlabel('$\Delta$')
+    ax2.scatter(delta, pres)
+    ax2.set_ylim(pres[-1] + 10, 0)
+    ax2.set_xlim(-max(abs(delta)) -0.01, max(abs(delta)) + 0.01)
+    ax2.tick_params(left=False)
+    
+    ax3.barh(pres, delta**2)
+    ax3.set_xlabel('$\Delta^2$')
+    ax3.set_ylim(pres[-1] + 10, 0)
+    ax3.tick_params(left=False)
+    fig.tight_layout()
+    plt.show()
 
-    def compute_G(D, alfa):
-        G = (fit_fun(D, df) - fit_fun(D + Delta, df)) /Delta
-        return G
+def penalty_f(z, a, c, MLD):
+    return a * np.exp(- (z - MLD)**2 / 2 / c**2)
 
-    path = '../results/' + file_name
+def modified_fitness(individuals, z, y, args, MLD, a, c,):
+    ''' Modfied version to implement higher error weights to points in
+    the MLD '''
+    
+    alpha = fitness(individuals, z, y, args) * np.sqrt(len(y)) \
+            / np.sum(((y - fit_function(individuals, z, args))**2 
+            * penalty_f(z, a, c, MLD)), axis=1)
 
-    df = df.assign(G95=lambda x: compute_G(x.D1m, alfa))
-    df.to_csv(path, index=False)
+    fitness = np.sqrt(np.sum(((y - fit_function(individuals, z, args))**2)
+              * (1 + alpha)) / len(y))
+
+    return fitness
+
+def plot_fit_RMS(df, temp, pres, loc):
+    fig, ax1, ax2 = plt.subplots(1, 2)
+    
 
 
 def plot_worst_fit_profiles(df, tems, pres):
@@ -89,26 +164,26 @@ def plot_worst_fit_profiles(df, tems, pres):
     for profile in profiles:
         plot_profile_fit(df, tems, pres, profile)
 
-def plot_multiple_profiles(df, tems, pres, profile_numbers):
+def plot_multiple_profiles(df, temp, pres, locs):
 
-    if profile_numbers != 4:
-        pass
+    if len(locs) != 4:
+        raise Exception('This function can only plot 4 profiles, {:.0f} were given'.format(locs))
 
     zz = np.linspace(0, 200, 300)
 
     fig, axes = plt.subplots(2, 2, figsize=(6.5, 6))
     axes = axes.reshape(4)
 
-    for ax, number in zip(axes, profile_numbers):
-        temp = tems[:, number]
-        ax.scatter(temp, pres, marker='o', fc='None', ec='tab:red')
-        ax.axhline(df.iloc[number, 3], c='grey', ls='--')
+    for ax, loc in zip(axes, locs):
+        ax.scatter(temp[:, loc], pres, marker='o', fc='None', ec='tab:red')
+        ax.axhline(df.iloc[loc, 3], c='grey', ls='--')
         ax.set_ylim(pres[-1] + 10, 0)
         ax.set_xlim(9.5, 18)
 
-        ax.plot(fit_fun(zz, df.iloc[number]), zz)
-        ax.set_xlabel('Temperatura (ºC)')
-        ax.set_ylabel('Profundidad (mb)')
+        ax.plot(fit_function(zz, df, loc), zz)
+        ax.set_xlabel('Temperature (ºC)')
+        ax.set_ylabel('Depth (mb)')
+        ax.set_title(df['Dates'].iloc[loc])
 
     fig.tight_layout()
     plt.show()
@@ -141,25 +216,6 @@ def animate_profile_evolution(df, tems, pres, start_number, final_number, number
     ani.save(f'../results/{file_name}')
 
 
-def spectral_analysis(df, variable, dt=5):
-    signal = df[variable]
-    n = np.size(signal)
-    fourier = fft(signal)
-    freq = fftfreq(n, d=dt)
-    indices = np.where(freq > 0)
-    freq = freq[indices]
-    fourier = abs(fourier[indices])
-    t = np.linspace(1, n, n)
-    period = 1 /freq
-
-    fig, ax = plt.subplots()
-    ax.plot(freq, fourier)
-    ax.set_xlabel('Frecuencia (Hz)')
-    ax.set_ylabel('Magnitud')
-    ax.set_xlim(0, 0.0001)
-    plt.show()
-
-# 2440000, 2480000
 
 if __name__ == '__main__':
     tems, pres, df_fit = import_data('Time_Series_Abril')

@@ -4,12 +4,12 @@ from pathlib import Path
 import numpy as np
 import h5py
 
-n = 3000 # max number of meassures in time series. for debugging purposes
+n = 300000 # max number of meassures in time series. for debugging purposes
 
 # paths
 data_path = '../data/raw/thermistor_chain/AGL_1/SBE56'
 output_path = '../data/time_series/'
-output_fn = 'AGL_1_SB56_3000.h5'
+output_fn = 'AGL_1_SB56_300000.h5'
 
 
 lat, lon = 43.789, 3.782 # latitude and longitude of AGL buoy
@@ -56,8 +56,7 @@ date = np.vstack([np.squeeze(thermistor['dates'])[:max_idx] for thermistor in ra
 if (date[1:, :] == date[:-1, :]).all():
     date = date[0, :] # we dont need dates to be a 2d array 
 
-datenum_vec = np.vectorize(datenum_to_epoch)
-date = datenum_vec(date)
+date = list(map(datenum_to_epoch, date))
 
 file = Path(output_path) / Path(output_fn)
 if file.is_file():
@@ -66,9 +65,16 @@ if file.is_file():
 with h5py.File(file, 'w') as f:
     temperature = f.create_dataset('temperature', data=temp, dtype='float64')
     pressure = f.create_dataset('pressure', data=pres, dtype='float64')
-    date = f.create_dataset('date', data=date, dtype='float64')
+    date = f.create_dataset('date', data=date, dtype='int')
     lat = f.create_dataset('lat', data=lat, dtype='float64')
     lon = f.create_dataset('lon', data=lon, dtype='float64')
 
 print(f"{file} generated succesfully")
+
+
+with h5py.File(file, 'r') as f:
+    date = np.array(f['date'])
+    for i in date:
+        print(i)
+        print(datetime.datetime.fromtimestamp(i))
 
