@@ -300,10 +300,10 @@ def main():
     args = parse_args() 
 
     if args.reference_fit == None:
-        fit_time_series()
+        fit_time_series(args)
 
     else:
-        fit_with_reference()
+        fit_with_reference(args)
 
 
 if __name__ == '__main__':

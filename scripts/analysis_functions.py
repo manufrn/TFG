@@ -3,6 +3,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.colors import BoundaryNorm
+from matplotlib.ticker import MaxNLocator
+import matplotlib.dates as mdates
 from datetime import datetime
 from config import data_dir
 
@@ -18,7 +21,7 @@ def load_time_series(filename):
         lat = np.array(f['lat'])
         lon = np.array(f['lon'])
 
-    date = np.array(map(datetime.fromtimestamp, date))
+    date = np.array([datetime.fromtimestamp(i) for i in date])
 
     return temperature, pressure, date, lat, lon
 
@@ -155,8 +158,7 @@ def modified_fitness(individuals, z, y, args, MLD, a, c,):
 
 def plot_fit_RMS(df, temp, pres, loc):
     fig, ax1, ax2 = plt.subplots(1, 2)
-    
-
+    pass
 
 def plot_worst_fit_profiles(df, tems, pres):
     em = df['em']
@@ -216,10 +218,70 @@ def animate_profile_evolution(df, tems, pres, start_number, final_number, number
     ani.save(f'../results/{file_name}')
 
 
+def plot_single_thermistor(temp, pres, date, i, lims=[None, None], interval=None):
+    '''Plot a single thermistor temperature series 
+    '''
 
+    height = pres[i]
+    date = date[lims[0]:lims[1]:interval]
+    temp = temp[i, lims[0]:lims[1]:interval]
+
+    
+    locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
+    formatter = mdates.ConciseDateFormatter(locator)
+
+    fig, ax = plt.subplots()
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(formatter)
+    ax.plot(date, temp)
+    ax.set_ylabel('Temperature (ºC)')
+    ax.set_xlabel('Date')
+    fig.tight_layout()
+    plt.show()
+    
+
+def plot_column_temperature(temp, pres, date, lims = [None, None], interval=None):
+
+    date = date[lims[0]:lims[1]:interval]
+    temp = temp[:, lims[0]:lims[1]:interval]
+
+    locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
+    formatter = mdates.ConciseDateFormatter(locator)
+    cmap = plt.colormaps['viridis']
+    levels = MaxNLocator(nbins=256).tick_values(temp.min(), temp.max())
+    norm = BoundaryNorm(levels, ncolors=cmap.N, clip=True)
+    
+    fig, ax = plt.subplots()
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(formatter)
+    for i in pres:
+        ax.axhline(i)
+    # ax.contour(X, Y, Z, levels=200)
+    im = ax.pcolormesh(date, pres, temp, cmap=cmap, norm=norm)
+    fig.colorbar(im)
+    fig.tight_layout()
+    plt.show()
+
+
+def find_thermocline_thermistors(df, pres, temp, loc):
+    '''
+    TODO
+    ''' 
+
+    mld = df['D1'][loc]
+    idx = np.where(pres < mld)
+    pres = np.delete(pres, idx, axis=0)
+
+    perm_thermocline = lambda z: df['a3'][loc] - df['a2'][loc] + df['b3'][loc] * (z - mld)
+    
+    max_delta = 1
+    
+    thermocline_therm = []
+    for i, depth in enumerate(pres):
+        if abs(perm_thermocline(depth) - temp[i, loc]) >= max_delta:
+            thermocline_therm.append(depth)
+
+    return thermocline_therm
+    
 if __name__ == '__main__':
-    tems, pres, df_fit = import_data('Time_Series_Abril')
-    n = len(df_fit['Dates'])
-    animate_profile_evolution(df_fit, tems, pres, 0, n -1, 250, 'Animación_serie_completa.mp4')
-    # plot_mutiple_profiles(df_fit, tems, pres, [1, 2, 3, 4])
-    # plot_fit_variable(df_fit, 'a3m', 100)
+    pass

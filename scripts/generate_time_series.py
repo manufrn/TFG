@@ -4,12 +4,12 @@ from pathlib import Path
 import numpy as np
 import h5py
 
-n = 300000 # max number of meassures in time series. for debugging purposes
+n = np.inf # max number of meassures in time series. for debugging purposes
 
 # paths
 data_path = '../data/raw/thermistor_chain/AGL_1/SBE56'
 output_path = '../data/time_series/'
-output_fn = 'AGL_1_SB56_300000.h5'
+output_fn = 'AGL_1_SB56.h5'
 
 
 lat, lon = 43.789, 3.782 # latitude and longitude of AGL buoy
