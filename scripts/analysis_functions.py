@@ -9,7 +9,7 @@ import matplotlib.dates as mdates
 from datetime import datetime
 from config import data_dir
 
-def load_time_series(filename):
+def load_time_series(filename, convert_date=True):
     '''Load time series saved as filename in data_dir/time_series
     '''
 
@@ -21,7 +21,9 @@ def load_time_series(filename):
         lat = np.array(f['lat'])
         lon = np.array(f['lon'])
 
-    date = np.array([datetime.fromtimestamp(i) for i in date])
+    if convert_date:
+        date = np.array([datetime.fromtimestamp(i) for i in date])
+
 
     return temperature, pressure, date, lat, lon
 
@@ -156,9 +158,6 @@ def modified_fitness(individuals, z, y, args, MLD, a, c,):
 
     return fitness
 
-def plot_fit_RMS(df, temp, pres, loc):
-    fig, ax1, ax2 = plt.subplots(1, 2)
-    pass
 
 def plot_worst_fit_profiles(df, tems, pres):
     em = df['em']
@@ -267,7 +266,7 @@ def find_thermocline_thermistors(df, pres, temp, loc):
     '''
     TODO
     ''' 
-
+    df = df.iloc[loc]
     mld = df['D1'][loc]
     idx = np.where(pres < mld)
     pres = np.delete(pres, idx, axis=0)
