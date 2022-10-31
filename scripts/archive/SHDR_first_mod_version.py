@@ -18,6 +18,7 @@ from datetime import date
 import matplotlib.pyplot as plt
 import pandas as pd
 import multiprocessing as mp
+import h5py
 
 printerr = sys.stderr.write
 
@@ -154,6 +155,15 @@ def extract_data_from_file(sal=False):
 
     fn = sys.argv[1]
 
+    if fn.endswith('.h5'):
+        with h5py.File(fn, 'r') as data:
+            temp = array(data['temperature'])
+            pres = array(data['pressure'])
+            date = array(data['date'])
+            lat = array(data['lat'])
+            lon = array(data['lon'])
+        return lat, lon, pres, temp, date
+
     if fn.endswith('.mat'):
         data = scipy.io.loadmat(fn)
 
@@ -278,22 +288,19 @@ def parse_single_date(press, tem):
     b3m = res.x[3]
     a3m = a1m -a2m
 
-    return D1m, a1m, a2m, b2m, c2m, a3m, b3m, em
+    return D1m, b2m, c2m, b3m, a2m, a1m, a3m, em
 
 
 
 def print_results_to_file(lat, lon, dates, results_fit):
     input_fn = sys.argv[1]
     base = os.path.basename(input_fn)
-    output_fn = os.path.join('Results', os.path.splitext(base)[0] + '_' + postfix + '.csv')
+    output_fn = os.path.join('data/SHDR_fit', os.path.splitext(base)[0] + '_' + postfix + '.csv')
 
     print('Writing results to ' + output_fn)
 
-    if len(list(lat)) == 1:
-        lat = [float(lat) for _ in range(size(dates))]
-        lon = [float(lon) for _ in range(size(dates))]
-
     columns = ['D1m', 'a1m', 'b2m', 'c2m', 'a2m', 'b3m', 'a3m', 'em']
+    columns = ['D1', 'b2', 'c2', 'b3', 'a2', 'a1', 'a3', 'em']
 
     df = pd.DataFrame(results_fit, columns = columns, dtype='float')
     df.insert(0, 'Dates', dates[0])
@@ -309,7 +316,7 @@ if __name__ == '__main__':
     print('Loading data...')
     lat, lon, pres, temps, dates = extract_data_from_file()
 
-    pool_arguments = [[pres[:, 0], temps[:, i]] for i in range(size(dates))]
+    pool_arguments = [[pres, temps[:, i]] for i in range(size(dates))]
 
     print('Begining DE fit...')
     with mp.Pool(processes=mp.cpu_count()) as pool:

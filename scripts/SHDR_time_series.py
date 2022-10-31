@@ -9,7 +9,7 @@ import numpy as np
 import h5py
 import scipy.io
 from scipy.optimize import OptimizeResult
-
+from line_profiler import LineProfiler
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -41,6 +41,7 @@ def parse_args():
     parser.add_argument('--results_folder', type=str, default='/home/manu/TFG_repo/data/SHDR_fit')
     parser.add_argument('--output_file', type=str, default=None)
     parser.add_argument('--tol', type=float, default=0.0025)
+    parser.add_argument('--seed', type=int, default=111)
     
     return parser.parse_args()
 
@@ -131,7 +132,6 @@ def fit_function(individuals, z, args):
 
     return a1 + pos * (b3 * (z - D1) + a2 * (np.exp(exponent) - 1.0))
 
-
 def random_init_population(z, y, args):
     ''' Returns a random population of solutions of size num_individuals 
     initialized randomly with values inside limits for a profile with meassures
@@ -170,10 +170,9 @@ def modified_fitness(individuals, z, y, args, MLD, a, c,):
 
     return fitness
 
-
-def diferential_evolution(individuals, z, y, args, delta_args=None):
+def diferential_evolution(individuals, z, y, lims, args, delta_args=None):
     n = args.num_individuals
-    lims_min, lims_max = get_fit_limits(z, y, args)
+    lims_min, lims_max = lims
     n_var = np.size(lims_max)
     
     if delta_args == None:
@@ -234,17 +233,38 @@ def fit_profile(z, y, args):
     if len(z) < args.min_obs:
         return 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.9
     
-    first_gen = random_init_population(z, y, args)
+    lims_min, lims_max = get_fit_limits(z, y, args)
+    lims = (lims_min, lims_max)
 
-    optimized_result = diferential_evolution(first_gen, z, y, args)
+    first_gen = random_init_population(z, y, args)
+    result_1 = diferential_evolution(first_gen, z, y, lims, args)
+    
     
     #### DELTA CODING ####
-    # TO-DO
-
     
-    D1, b2, c2, b3, a2, a1 = optimized_result.x
+    # set new limits for fit in function of previous fit result
+    # and have them meet the physical limits
+    v_min, v_max = 0.85 * result_1.x, 1.15 * result_1.x
+    for i in range(6):
+        lim_min_d = min(v_min[i], v_max[i])
+        lim_max_d = max(v_min[i], v_max[i])
+        lims_min[i] = max(lims_min[i], lim_min_d)
+        lims_max[i] = max(lims_max[i], lim_max_d)
+    lims = (lims_min, lims_max)
+
+    first_gen = random_init_population(z, y, args)   # new first generation
+    result_delta = diferential_evolution(first_gen, z, y, lims, args)
+
+    if result_1.fun < result_delta.fun:
+        result = result_1
+
+    else:
+        result = result_delta
+
+    D1, b2, c2, b3, a2, a1 = result.x
+    em = result.fun
     a3 = a1 - a2 
-    return D1, b2, c2, b3, a2, a1, a3, optimized_result.fun
+    return D1, b2, c2, b3, a2, a1, a3, em
     
         
 def save_results(lat, lon, dates, results, args):

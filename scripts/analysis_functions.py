@@ -6,7 +6,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
 import matplotlib.dates as mdates
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import data_dir
 
 def load_time_series(filename, convert_date=True):
@@ -14,6 +14,9 @@ def load_time_series(filename, convert_date=True):
     '''
 
     file_path = data_dir / 'time_series' / filename
+    if not filename.endswith('.h5'):
+        raise Exception('Only .h5 time series supported')
+
     with h5py.File(file_path, 'r') as f:
         temperature = np.array(f['temperature'])
         pressure = np.array(f['pressure'])
@@ -23,7 +26,6 @@ def load_time_series(filename, convert_date=True):
 
     if convert_date:
         date = np.array([datetime.fromtimestamp(i) for i in date])
-
 
     return temperature, pressure, date, lat, lon
 
@@ -36,17 +38,30 @@ def load_SHDR_fit(filename):
     file_path = data_dir / 'SHDR_fit' / filename
     df_fit = pd.read_csv(file_path)
     df_fit['Dates'] = df_fit['Dates'].apply(lambda x: datetime.fromtimestamp(x))
-
     return df_fit
      
 
+
 def date_to_iloc(df, date):
+    ''' Use fit dataframe to convert a given date to the closest iloc. 
+    '''
+    
     try:
         iloc = df[df['Dates'] == date].index[-1]
     except:
-        closest = min(df['Dates'], key=lambda sub: abs(sub - date))
-        iloc = df[df['Dates'] == closest].index
+
+        possible_dates = [date + timedelta(seconds=dt) for dt in (-2, -1, 1, 2)]
+        iloc = df['Dates'].isin(possible_dates).idxmax()
     return iloc
+
+
+def timedelta_to_interval(df, timedelta):
+        '''Return interval in rows of df fit for a given timedelta
+        '''
+
+        dt = df.iloc[1, 0] - df.iloc[0, 0]
+        interval = np.int(np.round(timedelta.total_seconds() / dt.total_seconds()))
+        return interval
 
 
 
@@ -56,7 +71,7 @@ def fit_function(z, df, loc):
     '''
     
     # check if inputed loc is datetime object and convert it to iloc
-    if type(loc) == 'datetime.datetime':
+    if isinstance(loc, datetime):
         loc = date_to_iloc(df, loc)
 
     fit = df.iloc[loc]
@@ -72,7 +87,16 @@ def fit_function(z, df, loc):
 
 
 def plot_fit_variable(df, variable, lims = [None, None], interval=None):
+    '''Plot given fit variable (e.g D1, a1, ...) for time between lims and 
+    with given interval.
+    '''
     
+    if isinstance(interval, timedelta):
+        interval = timedelta_to_interval(df, interval)
+
+    if isinstance(lims[0], datetime):
+        lims = [date_to_iloc(df, lim) for lim in lims]
+
     dic = {'D1': 'MLD (m)', 'a1': 'SST (ºC)'}
     var = df[variable][lims[0]:lims[1]:interval]
     dates = df['Dates'][lims[0]:lims[1]:interval]
@@ -89,8 +113,10 @@ def plot_fit_variable(df, variable, lims = [None, None], interval=None):
 
 
 def plot_profile_fit(df, temp, pres, loc):
+    '''Plot measured vertical profile and fit for measure at loc
+    '''
 
-    if type(loc) == 'datetime.datetime':
+    if isinstance(loc, datetime):
         loc = date_to_iloc(df, loc)
 
     zz = np.linspace(0, pres[-1] + 5, 300)
@@ -103,19 +129,28 @@ def plot_profile_fit(df, temp, pres, loc):
     ax.plot(fit_function(zz, df, loc), zz)
     ax.set_xlabel('Temperature (ºC)')
     ax.set_ylabel('Depth (mb)')
+    ax.set_title(df['Dates'].iloc[loc])
     fig.tight_layout()
     plt.show()
 
 
-def fitness(df, y, z, loc):
-    ''' Get RMS for profile in loc at heightz 
+def fitness(df, temp, pres, loc):
+    ''' Get RMS for profile in loc at height z 
     ''' 
-    fitness = np.sqrt(np.sum((y[:, loc] - fit_function(z, df, loc))**2) / len(y[:, loc]))
-    print(fitness)
+
+    if isinstance(loc, datetime):
+        loc = date_to_iloc(df, loc)
+
+    temp_loc = temp[:, loc]
+    fitness = np.sqrt(np.sum((temp_loc - fit_function(pres, df, loc))**2) / len(temp_loc))
     return fitness
     
 
 def plot_RMS_fit(df, temp, pres, loc):
+    ''' Plot experimental profile and fit with diference between fit and profile,
+    and square of that difference.
+
+    '''
     
     delta = temp[:, loc] - fit_function(pres, df, loc)
     zz = np.linspace(0, pres[-1] + 5, 300)
@@ -142,8 +177,10 @@ def plot_RMS_fit(df, temp, pres, loc):
     fig.tight_layout()
     plt.show()
 
+
 def penalty_f(z, a, c, MLD):
     return a * np.exp(- (z - MLD)**2 / 2 / c**2)
+
 
 def modified_fitness(individuals, z, y, args, MLD, a, c,):
     ''' Modfied version to implement higher error weights to points in
@@ -159,11 +196,13 @@ def modified_fitness(individuals, z, y, args, MLD, a, c,):
     return fitness
 
 
-def plot_worst_fit_profiles(df, tems, pres):
-    em = df['em']
-    profiles = df.index[df['em'] > 2]
+def plot_worst_fit_profiles(df, temp, pres, em, number=5):
+    profiles = df.index[df['em'] > em]
+    print('plotting')
+    profiles = profiles[:number]
     for profile in profiles:
-        plot_profile_fit(df, tems, pres, profile)
+        plot_profile_fit(df, temp, pres, profile)
+        
 
 def plot_multiple_profiles(df, temp, pres, locs):
 
@@ -188,6 +227,7 @@ def plot_multiple_profiles(df, temp, pres, locs):
 
     fig.tight_layout()
     plt.show()
+
 
 def animate_profile_evolution(df, tems, pres, start_number, final_number, number_plots, file_name):
     numbers = np.linspace(start_number, final_number, number_plots, dtype='int')
