@@ -9,7 +9,6 @@ import numpy as np
 import h5py
 import scipy.io
 from scipy.optimize import OptimizeResult
-from line_profiler import LineProfiler
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -117,6 +116,7 @@ def get_fit_limits(z, y, args):
     
     return lims_min, lims_max
 
+
 def fit_function(individuals, z, args):
     '''Estimate the function a group of individuals at a height z'''
 		
@@ -132,6 +132,7 @@ def fit_function(individuals, z, args):
 
     return a1 + pos * (b3 * (z - D1) + a2 * (np.exp(exponent) - 1.0))
 
+
 def random_init_population(z, y, args):
     ''' Returns a random population of solutions of size num_individuals 
     initialized randomly with values inside limits for a profile with meassures
@@ -146,7 +147,7 @@ def random_init_population(z, y, args):
     return individuals
     
 
-def fitness(individuals, z, y, args):
+def RMS_fitness(individuals, z, y, args):
     '''Estimate the fitting for a group of individuals via mean squared error'''
     
     fitness = np.sqrt(np.sum((y - fit_function(individuals, z, args))**2, axis=1) / len(y))
@@ -161,25 +162,25 @@ def modified_fitness(individuals, z, y, args, MLD, a, c,):
     ''' Modfied version to implement higher error weights to points in
     the MLD '''
     
-    alpha = fitness(individuals, z, y, args) * np.sqrt(len(y)) \
+    alpha = RMS_fitness(individuals, z, y, args) * np.sqrt(len(y)) \
             / np.sum(((y - fit_function(individuals, z, args))**2 
             * penalty_f(z, a, c, MLD)), axis=1)
 
     fitness = np.sqrt(np.sum(((y - fit_function(individuals, z, args))**2)
-              * (1 + alpha)) / len(y))
+              * (1 + alpha * penalty_f(z, a, c, MLD)), axis=1) / len(y))
 
     return fitness
 
-def diferential_evolution(individuals, z, y, lims, args, delta_args=None):
+def diferential_evolution(individuals, z, y, lims, fitness_func, args, penalty_args = None):
     n = args.num_individuals
     lims_min, lims_max = lims
     n_var = np.size(lims_max)
-    
-    if delta_args == None:
-        present_fitns = fitness(individuals, z, y, args)
+     
+    if penalty_args == None:
+        present_fitns = fitness_func(individuals, z, y, args)
 
     else:
-        present_fitns = modified_fitness(individuals, z, y, args, **delta_args)
+        present_fitns = fitness_func(individuals, z, y, args, *penalty_args)
 
     best_fit_loc = present_fitns.argmin()
     best_fit = individuals[best_fit_loc]
@@ -203,8 +204,13 @@ def diferential_evolution(individuals, z, y, lims, args, delta_args=None):
         # seting limits
         new_gen = np.where(new_gen < lims_min.reshape((1,6)), lims_min.reshape((1,6)), new_gen)
         new_gen = np.where(new_gen > lims_max.reshape((1,6)), lims_max.reshape((1,6)), new_gen)
+
+        if penalty_args == None:
+            new_fitns = fitness_func(new_gen, z, y, args)
+
+        else:
+            new_fitns = fitness_func(new_gen, z, y, args, *penalty_args)
             
-        new_fitns = fitness(new_gen, z, y, args)
         
         # update individuals to new generation
         individuals = np.where(present_fitns[:, None] < new_fitns[:, None], individuals, new_gen)
@@ -237,7 +243,7 @@ def fit_profile(z, y, args):
     lims = (lims_min, lims_max)
 
     first_gen = random_init_population(z, y, args)
-    result_1 = diferential_evolution(first_gen, z, y, lims, args)
+    result_1 = diferential_evolution(first_gen, z, y, lims, RMS_fitness, args)
     
     
     #### DELTA CODING ####
@@ -253,7 +259,7 @@ def fit_profile(z, y, args):
     lims = (lims_min, lims_max)
 
     first_gen = random_init_population(z, y, args)   # new first generation
-    result_delta = diferential_evolution(first_gen, z, y, lims, args)
+    result_delta = diferential_evolution(first_gen, z, y, lims, RMS_fitness, args)
 
     if result_1.fun < result_delta.fun:
         result = result_1

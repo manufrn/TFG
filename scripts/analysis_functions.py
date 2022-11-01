@@ -149,8 +149,10 @@ def fitness(df, temp, pres, loc):
 def plot_RMS_fit(df, temp, pres, loc):
     ''' Plot experimental profile and fit with diference between fit and profile,
     and square of that difference.
-
     '''
+
+    if isinstance(loc, datetime):
+        loc = date_to_iloc(df, loc)
     
     delta = temp[:, loc] - fit_function(pres, df, loc)
     zz = np.linspace(0, pres[-1] + 5, 300)
@@ -170,10 +172,11 @@ def plot_RMS_fit(df, temp, pres, loc):
     ax2.set_xlim(-max(abs(delta)) -0.01, max(abs(delta)) + 0.01)
     ax2.tick_params(left=False)
     
-    ax3.barh(pres, delta**2)
+    ax3.barh(pres, delta**2, height=2)
     ax3.set_xlabel('$\Delta^2$')
     ax3.set_ylim(pres[-1] + 10, 0)
     ax3.tick_params(left=False)
+    fig.suptitle(df['Dates'].iloc[loc])
     fig.tight_layout()
     plt.show()
 

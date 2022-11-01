@@ -4,13 +4,13 @@ from pathlib import Path
 import numpy as np
 import h5py
 
-
-n = 60527 # max number of meassures in time series. for debugging purposes
+n_min = 362761
+n = 362961 # max number of meassures in time series. for debugging purposes
 
 # paths
 data_path = '../data/raw/thermistor_chain/AGL_1/SBE56'
 output_path = '../data/time_series/'
-output_fn = 'AGL_1_SB56_debug_delta.h5'
+output_fn = 'trial.h5'
 
 
 lat, lon = 43.789, 3.782 # latitude and longitude of AGL buoy
@@ -50,8 +50,8 @@ max_idx = min(len(thermistor['tem']) for thermistor in raw_data)
 max_idx = n if n < max_idx else max_idx
 
 # extract temperature and dates in a 2D numpy array each
-temp = np.vstack([np.squeeze(thermistor['tem'])[60274:max_idx] for thermistor in raw_data])
-date = np.vstack([np.squeeze(thermistor['dates'])[60274:max_idx] for thermistor in raw_data])
+temp = np.vstack([np.squeeze(thermistor['tem'])[n_min:max_idx] for thermistor in raw_data])
+date = np.vstack([np.squeeze(thermistor['dates'])[n_min:max_idx] for thermistor in raw_data])
 
 # check that all thermistor dates are synced
 if (date[1:, :] == date[:-1, :]).all():
