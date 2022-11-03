@@ -7,7 +7,7 @@ from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
 import matplotlib.dates as mdates
 from datetime import datetime, timedelta
-from config import data_dir
+from config import data_dir, reports_dir
 
 def load_time_series(filename, convert_date=True):
     '''Load time series saved as filename in data_dir/time_series
@@ -199,23 +199,21 @@ def modified_fitness(individuals, z, y, args, MLD, a, c,):
     return fitness
 
 
-def plot_worst_fit_profiles(df, temp, pres, em, number=5):
-    profiles = df.index[df['em'] > em]
-    print('plotting')
-    profiles = profiles[:number]
-    for profile in profiles:
-        plot_profile_fit(df, temp, pres, profile)
-        
-
 def plot_multiple_profiles(df, temp, pres, locs):
+    
+    n = len(locs)
+    for loc in locs:
+        if isinstance(loc, datetime):
+            loc = date_to_iloc(df, loc)
 
-    if len(locs) != 4:
-        raise Exception('This function can only plot 4 profiles, {:.0f} were given'.format(locs))
+    if n % 2 != 0:
+        raise Exception('This function can only plot an even number \
+                        of profiles, {:.0f} were given'.format(n))
 
-    zz = np.linspace(0, 200, 300)
+    zz = np.linspace(0, 185, 300)
 
-    fig, axes = plt.subplots(2, 2, figsize=(6.5, 6))
-    axes = axes.reshape(4)
+    fig, axes = plt.subplots(int(n/2), 2, figsize=(6.5, n/2*3))
+    axes = axes.reshape(n)
 
     for ax, loc in zip(axes, locs):
         ax.scatter(temp[:, loc], pres, marker='o', fc='None', ec='tab:red')
@@ -232,9 +230,9 @@ def plot_multiple_profiles(df, temp, pres, locs):
     plt.show()
 
 
-def animate_profile_evolution(df, tems, pres, start_number, final_number, number_plots, file_name):
+def animate_profile_evolution(df, tems, pres, start_number, final_number, number_plots, filename):
     numbers = np.linspace(start_number, final_number, number_plots, dtype='int')
-    zz = np.linspace(0, 200, 300)
+    zz = np.linspace(0, 175, 300)
 
     fig, ax = plt.subplots(figsize=(6.5, 6))
     ax.set_xlim((10, 20))
@@ -247,17 +245,17 @@ def animate_profile_evolution(df, tems, pres, start_number, final_number, number
     points, = ax.plot([], [], 'o', mfc='None', mec='tab:red')
     line, = ax.plot([], [], c='tab:blue')
     mld, = ax.plot([], [], c='grey', ls='--')
-    title = ax.text(0.85, 0.9, '', bbox={'facecolor': 'w', 'alpha': 0.5,
+    title = ax.text(0.7, 0.1, '', bbox={'facecolor': 'w', 'alpha': 0.5,
                                          'pad': 5}, transform=ax.transAxes, ha='center')
 
     def animate(i):
         points.set_data(tems[:, i], pres)
-        line.set_data(fit_fun(zz, df.iloc[i]), zz)
+        line.set_data(fit_function(zz, df, i), zz)
         mld.set_data((9.5, 18), (df.iloc[i, 3], df.iloc[i, 3]))
-        title.set_text('nº: {}'.format(i))
+        title.set_text('{}'.format(df['Dates'][i]))
 
     ani = FuncAnimation(fig, animate, frames=numbers, interval=80)
-    ani.save(f'../results/{file_name}')
+    ani.save(reports_dir / 'movies' / filename)
 
 
 def plot_single_thermistor(temp, pres, date, i, lims=[None, None], interval=None):
@@ -296,9 +294,8 @@ def plot_column_temperature(temp, pres, date, lims = [None, None], interval=None
     fig, ax = plt.subplots()
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
-    for i in pres:
-        ax.axhline(i)
-    # ax.contour(X, Y, Z, levels=200)
+    # for i in pres:
+    #     ax.axhline(i)
     im = ax.pcolormesh(date, pres, temp, cmap=cmap, norm=norm)
     fig.colorbar(im)
     fig.tight_layout()

@@ -3,14 +3,16 @@ import datetime
 from pathlib import Path
 import numpy as np
 import h5py
+from config import data_dir
 
-n_min = 362761
-n = 362961 # max number of meassures in time series. for debugging purposes
+# 518400
+n_min = 349200
+n = 372600 # max number of meassures in time series. for debugging purposes
 
 # paths
-data_path = '../data/raw/thermistor_chain/AGL_1/SBE56'
-output_path = '../data/time_series/'
-output_fn = 'trial.h5'
+data_path = data_dir / 'raw/thermistor_chain/AGL_1/SBE56'
+output_dir = data_dir / 'time_series'
+output_fn = 'winter_variability.h5'
 
 
 lat, lon = 43.789, 3.782 # latitude and longitude of AGL buoy
@@ -59,7 +61,7 @@ if (date[1:, :] == date[:-1, :]).all():
 
 date = list(map(datenum_to_epoch, date))
 
-file = Path(output_path) / Path(output_fn)
+file = Path(output_dir) / Path(output_fn)
 if file.is_file():
     print('Output file already exists. Overwriting.')
 

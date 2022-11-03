@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import time
 import tqdm
 import argparse
@@ -29,7 +30,7 @@ def parse_args():
     # Fit
     parser.add_argument('--max_b2_c2', type=float, default=0.5)
     parser.add_argument('--exp_limit', type=float, default=100)
-    parser.add_argument('--bias_parametres', type=tuple, default=(1, 1))
+    parser.add_argument('--bias_parametres', type=float, nargs= '+', default=None)
 
     # Physical
     parser.add_argument('--min_depth', type=float, default=100)
@@ -117,6 +118,14 @@ def get_fit_limits(z, y, args):
     return lims_min, lims_max
 
 
+def limits_from_reference(z, y, reference, args):
+    '''Given SHDR fit parametres from reference, get limits
+    for new fit that are consistent with previous 
+    TODO: for the moment it just returns get_fit_limits()
+    '''
+    return get_fit_limits(z, y, args)
+
+
 def fit_function(individuals, z, args):
     '''Estimate the function a group of individuals at a height z'''
 		
@@ -154,8 +163,11 @@ def RMS_fitness(individuals, z, y, args):
     return fitness
     
 
-def penalty_f(z, a, c, MLD):
-    return a * np.exp(- (z - MLD)**2 / 2 / c**2)
+def penalty_f(z, MLD, a, c):
+
+     pos = np.where(z <= MLD, 1.0, 0.0)
+     # return a * np.exp(- (z - MLD / 4)**2 / 2 / c**2)
+     return a*pos
 
 
 def modified_fitness(individuals, z, y, args, MLD, a, c,):
@@ -164,12 +176,12 @@ def modified_fitness(individuals, z, y, args, MLD, a, c,):
     
     alpha = RMS_fitness(individuals, z, y, args) * np.sqrt(len(y)) \
             / np.sum(((y - fit_function(individuals, z, args))**2 
-            * penalty_f(z, a, c, MLD)), axis=1)
+            * penalty_f(z, MLD, a, c)), axis=1)
 
     fitness = np.sqrt(np.sum(((y - fit_function(individuals, z, args))**2)
-              * (1 + alpha * penalty_f(z, a, c, MLD)), axis=1) / len(y))
-
+                             * (1 + alpha[:, None] * penalty_f(z, MLD, a, c)), axis=1) / len(y))
     return fitness
+
 
 def diferential_evolution(individuals, z, y, lims, fitness_func, args, penalty_args = None):
     n = args.num_individuals
@@ -226,7 +238,7 @@ def diferential_evolution(individuals, z, y, lims, fitness_func, args, penalty_a
     return result
     
 
-def fit_profile(z, y, args):
+def fit_profile(z, y, args, reference = None): 
     '''Parse and fit data from a single profile'''
     
     z = z[np.isfinite(y)]
@@ -239,11 +251,16 @@ def fit_profile(z, y, args):
     if len(z) < args.min_obs:
         return 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.9
     
-    lims_min, lims_max = get_fit_limits(z, y, args)
+    if reference == None:        
+        lims_min, lims_max = get_fit_limits(z, y, args)
+    
+    else:
+        lims_min, lims_max = limits_from_reference(z, y, reference,  args)
+
     lims = (lims_min, lims_max)
 
     first_gen = random_init_population(z, y, args)
-    result_1 = diferential_evolution(first_gen, z, y, lims, RMS_fitness, args)
+    result_1 = diferential_evolution(first_gen, z, y, lims, RMS_fitness, args)  
     
     
     #### DELTA CODING ####
@@ -256,14 +273,22 @@ def fit_profile(z, y, args):
         lim_max_d = max(v_min[i], v_max[i])
         lims_min[i] = max(lims_min[i], lim_min_d)
         lims_max[i] = max(lims_max[i], lim_max_d)
-    lims = (lims_min, lims_max)
+    lims_delta = (lims_min, lims_max)
 
     first_gen = random_init_population(z, y, args)   # new first generation
-    result_delta = diferential_evolution(first_gen, z, y, lims, RMS_fitness, args)
+
+    if args.bias_parametres == None:
+        result_delta = diferential_evolution(first_gen, z, y, lims, RMS_fitness, args)
+
+    else:
+        MLD = result_1.x[0]
+        penalty_args = [MLD, args.bias_parametres[0], MLD/6]
+        result_delta = diferential_evolution(first_gen, z, y, lims, modified_fitness, args, \
+                                             penalty_args)
 
     if result_1.fun < result_delta.fun:
         result = result_1
-
+    
     else:
         result = result_delta
 
@@ -296,12 +321,34 @@ def save_results(lat, lon, dates, results, args):
     results_df.to_csv(output_path, index=False, mode='w+')
 
 
-def fit_time_series(args):
-
+def main():
+    args = parse_args() 
+    
     t_0 = time.time()
-
+    
     lat, lon, pres, temps, dates = extract_data_from_file(args)
     pool_arguments = [[pres, temps[:, i], args] for i in range(len(dates))]
+    
+    # check for reference_fit and construct argument list for pool
+    # that contains the reference (parametres of fit) that each fit should 
+    # have depending on their date
+    if args.reference_fit != None:
+        df_reference = pd.read_csv(args.reference_fit)
+
+        idx = np.searchsorted(dates, df_reference['Dates'])
+        array_reference = df_reference.to_numpy()[:, 3:] # convert dataframe to array
+                                                         # and remove date, lat, lon
+        del df_reference
+
+        reference_arguments = []
+        for i in range(len(dates)):
+            l = i >= idx
+            i = len(l) - np.argmax(l[::-1]) - 1
+            reference_arguments.append(array_reference[i])
+
+        pool_arguments.append(reference_arguments)
+
+    print('Time used to read data and generate arguments: ', time.time() - t_0)
 
     print('Begining DE fit...')
 
@@ -311,26 +358,6 @@ def fit_time_series(args):
     save_results(lat, lon, dates, results_fit, args)
     
     print('Elapsed time: {:.2f} seconds'.format(time.time() - t_0))
-
-def fit_with_reference(args):
-
-    lat, lon, pres, temps, dates = extract_data_from_file(args)
-
-    df_reference = pd.read_csv(args.reference_fit)
-
-    # check where referece == dates
-    idx = dates.searchsorted(df_reference['Dates'])
-
-
-def main():
-    args = parse_args() 
-
-    if args.reference_fit == None:
-        fit_time_series(args)
-
-    else:
-        fit_with_reference(args)
-
 
 if __name__ == '__main__':
     main()
