@@ -42,25 +42,24 @@ def load_SHDR_fit(filename):
      
 
 
-def date_to_iloc(df, date):
+def date_to_iloc(dates, date):
     ''' Use fit dataframe to convert a given date to the closest iloc. 
     '''
     
     try:
-        iloc = df[df['Dates'] == date].index[-1]
-    except:
+        iloc = np.where(dates == date)[0][0]
 
+    except:
         possible_dates = [date + timedelta(seconds=dt) for dt in (-2, -1, 1, 2)]
-        iloc = df['Dates'].isin(possible_dates).idxmax()
+        iloc = np.in1d(dates, possible_dates).argmax()
     return iloc
 
 
-def timedelta_to_interval(df, timedelta):
+def timedelta_to_interval(timedelta, dt=5):
         '''Return interval in rows of df fit for a given timedelta
         '''
 
-        dt = df.iloc[1, 0] - df.iloc[0, 0]
-        interval = np.int(np.round(timedelta.total_seconds() / dt.total_seconds()))
+        interval = np.int(np.round(timedelta.total_seconds() / dt))
         return interval
 
 
@@ -72,7 +71,7 @@ def fit_function(z, df, loc):
     
     # check if inputed loc is datetime object and convert it to iloc
     if isinstance(loc, datetime):
-        loc = date_to_iloc(df, loc)
+        loc = date_to_iloc(df['Dates'], loc)
 
     fit = df.iloc[loc]
     
@@ -92,10 +91,10 @@ def plot_fit_variable(df, variable, lims = [None, None], interval=None):
     '''
     
     if isinstance(interval, timedelta):
-        interval = timedelta_to_interval(df, interval)
+        interval = timedelta_to_interval(df['Dates'], interval)
 
     if isinstance(lims[0], datetime):
-        lims = [date_to_iloc(df, lim) for lim in lims]
+        lims = [date_to_iloc(df['Dates'], lim) for lim in lims]
 
     dic = {'D1': 'MLD (m)', 'a1': 'SST (ºC)'}
     var = df[variable][lims[0]:lims[1]:interval]
@@ -117,7 +116,8 @@ def plot_profile_fit(df, temp, pres, loc):
     '''
 
     if isinstance(loc, datetime):
-        loc = date_to_iloc(df, loc)
+        loc = date_to_iloc(df['Dates'], loc)
+        print(loc)
 
     zz = np.linspace(0, pres[-1] + 5, 300)
 
@@ -139,7 +139,7 @@ def fitness(df, temp, pres, loc):
     ''' 
 
     if isinstance(loc, datetime):
-        loc = date_to_iloc(df, loc)
+        loc = date_to_iloc(df['Dates'], loc)
 
     temp_loc = temp[:, loc]
     fitness = np.sqrt(np.sum((temp_loc - fit_function(pres, df, loc))**2) / len(temp_loc))
@@ -152,7 +152,7 @@ def plot_RMS_fit(df, temp, pres, loc):
     '''
 
     if isinstance(loc, datetime):
-        loc = date_to_iloc(df, loc)
+        loc = date_to_iloc(df['Dates'], loc)
     
     delta = temp[:, loc] - fit_function(pres, df, loc)
     zz = np.linspace(0, pres[-1] + 5, 300)
@@ -258,11 +258,15 @@ def animate_profile_evolution(df, tems, pres, start_number, final_number, number
     ani.save(reports_dir / 'movies' / filename)
 
 
-def plot_single_thermistor(temp, pres, date, i, lims=[None, None], interval=None):
+def plot_single_thermistor(temp, pres, date, i, wide='True', lims=[None, None], interval=None):
     '''Plot a single thermistor temperature series 
     '''
+    if isinstance(lims[0], datetime):
+        lims = [date_to_iloc(date, lim) for lim in lims]
 
-    height = pres[i]
+    if isinstance(interval, timedelta):
+        inteval = timedelta_to_interval()
+
     date = date[lims[0]:lims[1]:interval]
     temp = temp[i, lims[0]:lims[1]:interval]
 
@@ -270,17 +274,26 @@ def plot_single_thermistor(temp, pres, date, i, lims=[None, None], interval=None
     locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
     formatter = mdates.ConciseDateFormatter(locator)
 
-    fig, ax = plt.subplots()
+    if wide:
+        fig, ax = plt.subplots(figsize=(5))
+    else: 
+        fig, ax = plt.subploes()
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
     ax.plot(date, temp)
-    ax.set_ylabel('Temperature (ºC)')
+    ax.set_title(f'Temperature at depth {pres[i]} mb (ºC)')
     ax.set_xlabel('Date')
     fig.tight_layout()
     plt.show()
     
 
 def plot_column_temperature(temp, pres, date, lims = [None, None], interval=None):
+
+    if isinstance(lims[0], datetime):
+        lims = [date_to_iloc(date, lim) for lim in lims]
+
+    if isinstance(interval, timedelta):
+        inteval = timedelta_to_interval()
 
     date = date[lims[0]:lims[1]:interval]
     temp = temp[:, lims[0]:lims[1]:interval]
@@ -294,6 +307,7 @@ def plot_column_temperature(temp, pres, date, lims = [None, None], interval=None
     fig, ax = plt.subplots()
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
+    ax.set_ylim(pres[-1] + 10, 0)
     # for i in pres:
     #     ax.axhline(i)
     im = ax.pcolormesh(date, pres, temp, cmap=cmap, norm=norm)
