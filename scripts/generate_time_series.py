@@ -6,13 +6,13 @@ import h5py
 from config import data_dir
 
 # 518400
-n_min = 349200
-n = 372600 # max number of meassures in time series. for debugging purposes
+n_min = 0
+n_max = 2471040 # max number of meassures in time series. For cropping time series.
 
 # paths
 data_path = data_dir / 'raw/thermistor_chain/AGL_1/SBE56'
-output_dir = data_dir / 'time_series'
-output_fn = 'winter_variability.h5'
+output_dir = data_dir / 'time_series' / 'processed'
+output_fn = 'AGL_1_SBE56.h5'
 
 
 lat, lon = 43.789, 3.782 # latitude and longitude of AGL buoy
@@ -49,7 +49,7 @@ raw_data = [loadmat(file) for file in mat_files]
 
 # find shortest time series for a single thermistor and get index
 max_idx = min(len(thermistor['tem']) for thermistor in raw_data)
-max_idx = n if n < max_idx else max_idx
+max_idx = n_max if n_max < max_idx else max_idx
 
 # extract temperature and dates in a 2D numpy array each
 temp = np.vstack([np.squeeze(thermistor['tem'])[n_min:max_idx] for thermistor in raw_data])

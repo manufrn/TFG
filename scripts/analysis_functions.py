@@ -258,11 +258,14 @@ def animate_profile_evolution(df, tems, pres, start_number, final_number, number
     ani.save(reports_dir / 'movies' / filename)
 
 
-def plot_single_thermistor(temp, pres, date, i, wide='True', lims=[None, None], interval=None):
+def plot_thermistor_series(temp, pres, date, i, wide='True', lims=[None, None], interval=None):
     '''Plot a single thermistor temperature series 
     '''
     if isinstance(lims[0], datetime):
-        lims = [date_to_iloc(date, lim) for lim in lims]
+        lims[0] = date_to_iloc(date, lims[0])
+
+    if isinstance(lims[1], datetime):
+        lims[1] = date_to_iloc(date, lims[1])
 
     if isinstance(interval, timedelta):
         inteval = timedelta_to_interval()
@@ -275,13 +278,13 @@ def plot_single_thermistor(temp, pres, date, i, wide='True', lims=[None, None], 
     formatter = mdates.ConciseDateFormatter(locator)
 
     if wide:
-        fig, ax = plt.subplots(figsize=(5))
+        fig, ax = plt.subplots(figsize=(7, 3.75))
     else: 
-        fig, ax = plt.subploes()
+        fig, ax = plt.subplots()
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
     ax.plot(date, temp)
-    ax.set_title(f'Temperature at depth {pres[i]} mb (ºC)')
+    ax.set_title(f'Temperature at depth {pres[i]} db (ºC)')
     ax.set_xlabel('Date')
     fig.tight_layout()
     plt.show()
