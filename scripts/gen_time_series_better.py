@@ -1,29 +1,25 @@
 import h5py
-import datetime
+from datetime import datetime, timedelta
 import numpy as np
 from pathlib import Path
 from scipy.io import loadmat
 from config import data_dir
 
+    
+@np.vectorize
 def datenum_to_epoch(datenum):
     """
-    Convert Matlab datenum into epoch.
+    Convert Matlab datenum into Python datetime.
     :param datenum: Date in datenum format
-    :return:        Epoch time. Seconds from the 1st of January 1970
+    :return:        Datetime object corresponding to datenum.
     """
-   
     days = datenum % 1
-    hours = days % 1 * 24
-    minutes = hours % 1 * 60
-    seconds = minutes % 1 * 60
-    datetime_format = datetime.datetime.fromordinal(int(datenum)) \
-           + datetime.timedelta(days=int(days)) \
-           + datetime.timedelta(hours=int(hours)) \
-           + datetime.timedelta(minutes=int(minutes)) \
-           + datetime.timedelta(seconds=round(seconds)) \
-           - datetime.timedelta(days=366)
-
-    return datetime_format.timestamp()
+    datetime_format = (datetime.fromordinal(int(datenum)) \
+           + timedelta(days=days) \
+           - timedelta(days=366))
+    date64 = np.datetime64(datetime_format)
+    posix_time = (date64 - np.datetime64('1970-01-01T00:00:00')) / (np.timedelta64(1, 's'))
+    return round(posix_time)
 
 
 def get_SBE(path, pres, order, n_min = 0, n_max = None):
@@ -42,13 +38,13 @@ def get_SBE(path, pres, order, n_min = 0, n_max = None):
         max_idx = n_max if n_max < max_idx else max_idx
 
     # extract temperature and dates in a 2D numpy array each
-    temp = np.vstack([np.squeeze(thermistor['tem'])[n_min:max_idx] for thermistor in raw_data])
-    date = np.vstack([np.squeeze(thermistor['dates'])[n_min:max_idx] for thermistor in raw_data])
+    temp = np.vstack([np.squeeze(thermistor['tem'])[n_min:max_idx] for thermistor in raw_data]).T
+    date = np.vstack([np.squeeze(thermistor['dates'])[n_min:max_idx] for thermistor in raw_data]).T
 
     # check that all thermistor dates are synced
-    if (date[1:, :] == date[:-1, :]).all():
+    if (date[:, 1:] == date[:, :-1]).all():
         print('All SBE56 dates are synced. Generating 1d dates array')
-        date = date[0, :] # we dont need dates to be a 2d array 
+        date = date[:, 0] # we dont need dates to be a 2d array 
 
     else:
         print('SBE56 dates are not synced. Generating a 2d dates array with '
