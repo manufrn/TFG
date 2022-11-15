@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import h5py
+import netCDF4
 import scipy.io
 from scipy.optimize import OptimizeResult
 
@@ -72,26 +73,39 @@ def extract_data_from_file(args, sal=False):
             sal = data['sals']
        
         return lat, lon, pres, temp, dates
+    
 
-    # for Argo floats .nc files
+    # for netCDF4 files:
     elif fn.endswith('.nc'):
-        data = netcdf.NetCDFile(fn, 'r')
-        lat = data.variables['LATITUDE']
-        lon = data.variables['LONGITUDE']
-        pres = data.variables['PRES_ADJUSTED']
-        temp = data.variables['TEMP_ADJUSTED']
-        juld = data.variables['JULD']  # fecha desde ff.variables['REFERENCE_DATE_TIME']
-        plat = data.variables['PLATFORM_NUMBER']
-        dateref = data.variables['REFERENCE_DATE_TIME']
+        with netCDF4.Dataset(fn, 'r') as ds:
 
-        year = '%s%s%s%s' % (dateref[0], dateref[1], dateref[2], dateref[3])
-        month = '%s%s' % (dateref[4], dateref[5])
-        day = '%s%s' % (dateref[6], dateref[7])
+            # check if dataset is from argo float
+            if 'source' in dir(ds) and ds.source == 'Argo float':
+                lat = ds.variables['LATITUDE']
+                lon = ds.variables['LONGITUDE']
+                pres = ds.variables['PRES_ADJUSTED']
+                temp = ds.variables['TEMP_ADJUSTED']
+                juld = ds.variables['JULD']  # fecha desde ff.variables['REFERENCE_DATE_TIME']
+                plat = ds.variables['PLATFORM_NUMBER']
+                dateref = ds.variables['REFERENCE_DATE_TIME']
 
-        origin = datetime.date(int(year), int(month), int(day))
-        return None
+                year = '%s%s%s%s' % (dateref[0], dateref[1], dateref[2], dateref[3])
+                month = '%s%s' % (dateref[4], dateref[5])
+                day = '%s%s' % (dateref[6], dateref[7])
 
-    else:
+                origin = datetime.date(int(year), int(month), int(day))
+                return None
+    
+            else:
+                lat = ds.variables['lat'][:]
+                lon = ds.variables['lon'][:]
+                pres = ds.variables['pres'][:]
+                temp = ds.variables['temp'][:]
+                date = ds.variables['date'][:]
+
+                return lat, lon, pres, temp, date
+
+    else: 
         raise ValueError('Data format not recognised.')
 
 
@@ -240,7 +254,12 @@ def diferential_evolution(individuals, z, y, lims, fitness_func, args, penalty_a
 
 def fit_profile(z, y, args, reference = None): 
     '''Parse and fit data from a single profile'''
-    
+
+    # remove masks and work with normal arrays
+    if isinstance(z, np.ma.core.MaskedArray):
+        z = np.asarray(z[z.mask==False])
+        y = np.asarray(y[y.mask==False])
+
     z = z[np.isfinite(y)]
     y = y[np.isfinite(y)]
     
@@ -305,6 +324,9 @@ def save_results(lat, lon, dates, results, args):
 
     columns = ['D1', 'b2', 'c2', 'b3', 'a2', 'a1', 'a3', 'em']
 
+    if len(lat) == 1:
+        lat = np.array([lat for _ in range(len(dates))])
+        lon = np.array([lon for _ in range(len(dates))])
     # Convert results list to pd.Dataframe and save as .csv
     results_df = pd.DataFrame(results, columns=columns)
     results_df.insert(0, 'Dates', dates)
@@ -327,7 +349,7 @@ def main():
     t_0 = time.time()
     
     lat, lon, pres, temps, dates = extract_data_from_file(args)
-    pool_arguments = [[pres, temps[:, i], args] for i in range(len(dates))]
+    pool_arguments = [[pres[i, :], temps[i, :], args] for i in range(len(dates))]
     
     # check for reference_fit and construct argument list for pool
     # that contains the reference (parametres of fit) that each fit should 

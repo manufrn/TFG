@@ -3,6 +3,7 @@ import datetime
 from pathlib import Path
 import numpy as np
 import h5py
+import netCDF4
 from config import data_dir
 
 # 518400

@@ -29,6 +29,11 @@ def load_time_series(filename, convert_date=True):
 
     return temperature, pressure, date, lat, lon
 
+def masked_to_array(masked_array):
+    if isinstance(masked_array, np.ma.core.MaskedArray):
+        return np.asarray(masked_array[masked_array.mask == False])
+    else:
+        return masked_array
     
 def load_SHDR_fit(filename):
     '''Load  saved SHDR fit as filename in data_dir/SHDR_fit.
@@ -73,6 +78,7 @@ def fit_function(z, df, loc):
     if isinstance(loc, datetime):
         loc = date_to_iloc(df['Dates'], loc)
 
+    
     fit = df.iloc[loc]
     
     D1, b2, c2 = fit['D1'], fit['b2'], fit['c2']
@@ -122,7 +128,7 @@ def plot_profile_fit(df, temp, pres, loc):
     zz = np.linspace(0, pres[-1] + 5, 300)
 
     fig, ax = plt.subplots(figsize=(4, 4.6875))
-    ax.scatter(temp[:, loc], pres, marker='o', fc='None', ec='tab:red', s=22)
+    ax.scatter(temp[loc], pres[loc], marker='o', fc='None', ec='tab:red', s=22)
     ax.axhline(df.iloc[loc, 3], c='grey', ls='--') # plot MLD
     ax.set_ylim(pres[-1] + 10, 0)
     ax.set_xlim(9.5, 18)
@@ -210,15 +216,18 @@ def plot_multiple_profiles(df, temp, pres, locs):
         raise Exception('This function can only plot an even number \
                         of profiles, {:.0f} were given'.format(n))
 
-    zz = np.linspace(0, 185, 300)
+    max_ylim = np.max(pres) + 10
+    zz = np.linspace(0, max_ylim, 300)
 
     fig, axes = plt.subplots(int(n/2), 2, figsize=(6.5, n/2*3))
     axes = axes.reshape(n)
 
     for ax, loc in zip(axes, locs):
-        ax.scatter(temp[:, loc], pres, marker='o', fc='None', ec='tab:red')
+        temp_loc = masked_to_array(temp[loc])
+        pres_loc = masked_to_array(pres[loc])
+        ax.scatter(temp_loc, pres_loc, marker='o', fc='None', ec='tab:red')
         ax.axhline(df.iloc[loc, 3], c='grey', ls='--')
-        ax.set_ylim(pres[-1] + 10, 0)
+        ax.set_ylim(max_ylim, 0)
         ax.set_xlim(9.5, 18)
 
         ax.plot(fit_function(zz, df, loc), zz)
