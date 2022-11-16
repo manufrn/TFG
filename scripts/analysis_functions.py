@@ -1,4 +1,5 @@
 import h5py
+import netCDF4
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -14,20 +15,28 @@ def load_time_series(filename, convert_date=True):
     '''
 
     file_path = data_dir / 'time_series' / filename
-    if not filename.endswith('.h5'):
-        raise Exception('Only .h5 time series supported')
 
-    with h5py.File(file_path, 'r') as f:
-        temperature = np.array(f['temperature'])
-        pressure = np.array(f['pressure'])
-        date = np.array(f['date'])
-        lat = np.array(f['lat'])
-        lon = np.array(f['lon'])
+    if filename.endswith('.h5'):
+        with h5py.File(file_path, 'r') as f:
+            temp = np.array(f['temperature'])
+            pres = np.array(f['pressure'])
+            date = np.array(f['date'])
+            lat = np.array(f['lat'])
+            lon = np.array(f['lon'])
+    if filename.endswith('.nc'):
+        with netCDF4.Dataset(file_path, 'r') as ds:
+            temp = ds.variables['temp'][:]
+            pres = ds.variables['pres'][:]
+            date = ds.variables['date'][:]
+            lat = ds.variables['lat'][:]
+            lon = ds.variables['lon'][:]
+    else:
+        raise Exception('Only .h5 and .nc time series supported')
 
     if convert_date:
         date = np.array([datetime.fromtimestamp(i) for i in date])
 
-    return temperature, pressure, date, lat, lon
+    return temp, pres, date, lat, lon
 
 def masked_to_array(masked_array):
     if isinstance(masked_array, np.ma.core.MaskedArray):
@@ -59,6 +68,26 @@ def date_to_iloc(dates, date):
         iloc = np.in1d(dates, possible_dates).argmax()
     return iloc
 
+def date_to_iloc(dates, date):
+    ''' Use fit dataframe to convert a given date to the closest iloc. 
+    '''
+    
+    try:
+        iloc = np.where(dates == date)[0][0]
+
+    except:
+        sign = +1
+        value = 1
+        while True:
+            dt = sign*value
+            possible_date = date + timedelta(seconds=dt)
+            if date + timedelta(seconds=dt) in dates:
+                iloc =  np.where(dates==possible_date)[0][0]
+            
+            if sign == -1:
+                value += 1
+                
+            sign *= -1
 
 def timedelta_to_interval(timedelta, dt=5):
         '''Return interval in rows of df fit for a given timedelta

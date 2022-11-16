@@ -35,7 +35,7 @@ def parse_args():
 
     # Physical
     parser.add_argument('--min_depth', type=float, default=100)
-    parser.add_argument('--max_depth', type=float, default=300)
+    parser.add_argument('--max_depth', type=float, default=450)
     parser.add_argument('--min_obs', type=int, default=10)
     
     # Misc
@@ -137,7 +137,9 @@ def limits_from_reference(z, y, reference, args):
     for new fit that are consistent with previous 
     TODO: for the moment it just returns get_fit_limits()
     '''
-    return get_fit_limits(z, y, args)
+    lims = get_fit_limits(z, y, args)
+    # lower_b3 = 
+    return lims
 
 
 def fit_function(individuals, z, args):
@@ -179,7 +181,7 @@ def RMS_fitness(individuals, z, y, args):
 
 def penalty_f(z, MLD, a, c):
 
-     pos = np.where(z <= MLD, 1.0, 0.0)
+     pos = np.where(z > 200, 1.0, 0.0)
      # return a * np.exp(- (z - MLD / 4)**2 / 2 / c**2)
      return a*pos
 
@@ -252,7 +254,7 @@ def diferential_evolution(individuals, z, y, lims, fitness_func, args, penalty_a
     return result
     
 
-def fit_profile(z, y, args, reference = None): 
+def fit_profile(z, y, args, reference=None): 
     '''Parse and fit data from a single profile'''
 
     # remove masks and work with normal arrays
@@ -264,8 +266,10 @@ def fit_profile(z, y, args, reference = None):
     y = y[np.isfinite(y)]
     
     # only use depths until max_depth
-    max_z = np.nonzero(z > args.max_depth)[0]
-    z = z[:max_z] if len(max_z) != 0 else z
+    if (z > args.max_depth).any():
+        max_z_idx = np.argmax(z > args.max_depth)
+        z = z[:max_z_idx]
+        y = y[:max_z_idx]
     
     if len(z) < args.min_obs:
         return 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.9
@@ -341,6 +345,24 @@ def save_results(lat, lon, dates, results, args):
     output_path = Path(args.results_folder) / output_file
 
     results_df.to_csv(output_path, index=False, mode='w+')
+
+def generate_reference_arguments(df_reference, date):
+
+    df_reference = pd.read_csv(args.reference_fit)
+
+    idx = np.searchsorted(dates, df_reference['Dates'])
+    array_reference = df_reference.to_numpy()[:, 3:] # convert dataframe to array
+                                                     # and remove date, lat, lon
+    b3_mean = np.mean(df_reference['b3'])
+    b3_std = np.std(df_reference['b3'])
+    del df_reference
+
+
+    reference_arguments = []
+    for i in range(len(dates)):
+        l = i >= idx
+        i = len(l) - np.argmax(l[::-1]) - 1
+        reference_arguments.append(array_reference[i])
 
 
 def main():

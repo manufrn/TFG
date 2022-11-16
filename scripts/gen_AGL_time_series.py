@@ -64,9 +64,10 @@ def get_SBE56(path, n_min = 0, n_max = None):
 
 if __name__ == '__main__':
 
-    filename = data_dir / 'time_series' / 'processed' / 'AGL_1_37_56_cropped.nc'
-    latittude, longitude = 43.789, 3.782 # latitude and longitude of AGL buoy
-    n_max = 2471041 # to crop data before thermistors are taken out of the water
+    output_path = data_dir / 'time_series' / 'processed' / 'AGL_1_37_56_b3_test.nc'
+    latitude, longitude = 43.789, 3.782 # latitude and longitude of AGL buoy
+    n_min = 349200
+    n_max = 372600 # to crop data before thermistors are taken out of the water
 
     path_SBE56 = data_dir / 'raw' / 'thermistor_chain' / 'AGL_1' / 'SBE56'
     path_SBE37 = data_dir / 'raw' / 'thermistor_chain' / 'AGL_1' / 'SBE37'
@@ -74,16 +75,18 @@ if __name__ == '__main__':
     fn_low_SBE37 = 'SBE37346520190409.mat'
 
     ### SBE56 ###
-    temp_SBE56, pres_SBE56, date_SBE56 = get_SBE56(path_SBE56, n_max = n_max)
+    temp_SBE56, pres_SBE56, date_SBE56 = get_SBE56(path_SBE56, n_min = n_min, n_max = n_max)
     
     ### SBE37 ###
     low_SBE37 = loadmat(path_SBE37 / fn_low_SBE37)
     up_SBE37 = loadmat(path_SBE37 / fn_up_SBE37)
 
+    slice = np.s_[n_min:n_max]
     temp_up_37, date_up_37 = np.squeeze(up_SBE37['tem']), np.squeeze(up_SBE37['dates'])
     temp_low_37, date_low_37 = np.squeeze(low_SBE37['tem']), np.squeeze(low_SBE37['dates'])
     date_up_37 = datenum_to_epoch(date_up_37)
     date_low_37 = datenum_to_epoch(date_low_37)
+     
 
     press_low_37, press_up_37 = np.squeeze(low_SBE37['pre']), np.squeeze(up_SBE37['pre'])
     
@@ -93,43 +96,45 @@ if __name__ == '__main__':
     # move SBE56 dates to multiples of 5 seconds after meassure 122
     date_SBE56[123:] += 1
 
+    min_up_37_idx = np.argmax(np.in1d(date_up_37, date_SBE56))
+    min_low_37_idx = np.argmax(np.in1d(date_low_37, date_SBE56))
+
     # crop SBE37 to extent of SBE56
     last_up = np.nonzero(np.in1d(date_SBE56, date_up_37))[0][-1]
     last_low = np.nonzero(np.in1d(date_SBE56, date_low_37))[0][-1]
-    temp_up_37 = temp_up_37[:np.where(date_up_37 == date_SBE56[last_up])[0][0] + 1]
-    temp_low_37 = temp_low_37[:np.where(date_low_37 == date_SBE56[last_low])[0][0] + 1]
-
+    temp_up_37 = temp_up_37[min_up_37_idx:np.where(date_up_37 == date_SBE56[last_up])[0][0] + 1]
+    temp_low_37 = temp_low_37[min_low_37_idx:np.where(date_low_37 == date_SBE56[last_low])[0][0] + 1]
 
     ### GENERATE MASKED ARRAYS ###
     # temperature array
     masked_temp = np.ma.masked_all_like(np.zeros((len(date_SBE56), 16)))
-    up_slice = np.s_[:last_up+1:120, 6] # 6th column of array, values up till tast up every 120 points
-    low_slice = np.s_[:last_low+1:60, -1] # last column of array, values every 60 points
-
+    up_slice = np.s_[np.argmax(np.in1d(date_SBE56, date_up_37)):last_up+1:120, 6] # 6th column of array, values up till tast up every 120 points
+    low_slice = np.s_[np.argmax(np.in1d(date_SBE56, date_low_37)):last_low+1:60, -1] # last column of array, values every 60 points
     masked_temp[:, 0:6] = temp_SBE56[:, 0:6]
     masked_temp[up_slice] = temp_up_37    
     masked_temp[:, 7:-1] = temp_SBE56[:, 6:]
     masked_temp[low_slice] = temp_low_37
     
     print('Cada 120 elementos (10 min) de masked temp, hay 16 medidas?:', 
-          (masked_temp[::120].count(axis=1)==16).all())
+          (masked_temp[np.argmax(np.in1d(date_SBE56, date_up_37))::120].count(axis=1)==16).all())
     print('Cada 60 elementos (5 min) de masked temp, hay 15 medidas o más?:', 
-          (masked_temp[::60].count(axis=1) >= 15).all())
+          (masked_temp[np.argmax(np.in1d(date_SBE56, date_low_37))::60].count(axis=1) >= 15).all())
 
     # preassure array
     masked_pres = np.ma.masked_all_like(masked_temp)
     masked_pres[:, 0:6] = pres_SBE56[None, :6]
-    masked_pres[up_slice] = press_up_37[:np.where(date_up_37 == date_SBE56[last_up])[0][0] +1]
+    masked_pres[up_slice] = press_up_37[min_up_37_idx:np.where(date_up_37 == date_SBE56[last_up])[0][0] +1]
     masked_pres[:, 7:-1] = pres_SBE56[None, 6:]
-    masked_pres[low_slice] = press_low_37[:np.where(date_low_37 == date_SBE56[last_low])[0][0] +1]
+    masked_pres[low_slice] = press_low_37[min_low_37_idx:np.where(date_low_37 == date_SBE56[last_low])[0][0] +1]
 
     dim_pres = masked_pres.shape[1]
     dim_time = len(date_SBE56)
 
     ### SAVE SERIES AS netCDF4 ###
-    with netCDF4.Dataset(filename, mode='w', format='NETCDF4') as ds:
+    with netCDF4.Dataset(output_path, mode='w', format='NETCDF4') as ds:
         ds.description = 'Time series of AGL buy thermistor chain from 2018-11-16 11:00:00 to 2019-04-08 11:00:00'
         ds.title = 'AGL_1 thermistor chain series'
+
         # dimensions
         ds.createDimension('time', dim_time)
         ds.createDimension('pres', dim_pres)
@@ -141,13 +146,13 @@ if __name__ == '__main__':
         lon = ds.createVariable('lon', 'f4', ('lon',))
         temp = ds.createVariable('temp', 'f8', ('time', 'pres',))
         date = ds.createVariable('date', 'i4', ('time', ))
-        pres = ds.createVariable('pres', 'i4', ('time', 'pres', ))
+        pres = ds.createVariable('pres', 'i4', ('time', 'pres',))
         
         # asign data
-        lat[:] = latittude
+        lat[:] = latitude
         lon[:] = longitude
         temp[:, :] = masked_temp
         date[:] = date_SBE56
         pres[:, :] = masked_pres
 
-    print(f'Completed. Time series saved in {filename}')
+    print(f'Completed. Time series saved in {output_path}')
