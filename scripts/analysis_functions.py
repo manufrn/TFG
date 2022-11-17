@@ -56,25 +56,24 @@ def load_SHDR_fit(filename):
      
 
 
+# def date_to_iloc(dates, date):
+#     ''' Use fit dataframe to convert a given date to the closest iloc. 
+#     '''
+#     
+#     try:
+#         iloc = np.where(dates == date)[0][0]
+#
+#     except:
+#         possible_dates = [date + timedelta(seconds=dt) for dt in (-2, -1, 1, 2)]
+#         iloc = np.in1d(dates, possible_dates).argmax()
+    # return iloc
+
 def date_to_iloc(dates, date):
     ''' Use fit dataframe to convert a given date to the closest iloc. 
     '''
     
     try:
         iloc = np.where(dates == date)[0][0]
-
-    except:
-        possible_dates = [date + timedelta(seconds=dt) for dt in (-2, -1, 1, 2)]
-        iloc = np.in1d(dates, possible_dates).argmax()
-    return iloc
-
-def date_to_iloc(dates, date):
-    ''' Use fit dataframe to convert a given date to the closest iloc. 
-    '''
-    
-    try:
-        iloc = np.where(dates == date)[0][0]
-
     except:
         sign = +1
         value = 1
@@ -88,6 +87,8 @@ def date_to_iloc(dates, date):
                 value += 1
                 
             sign *= -1
+
+    return iloc
 
 def timedelta_to_interval(timedelta, dt=5):
         '''Return interval in rows of df fit for a given timedelta
