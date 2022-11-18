@@ -8,10 +8,11 @@ from config import data_dir
 from gen_AGL_time_series import datenum_to_epoch
 
 data_path = data_dir / 'raw' / 'oceanographic_station' / 'station7.mat'
-output_path = data_dir / 'time_series' / 'station7.nc'
+output_path = data_dir / 'time_series' / 'station7_more_profiles.nc'
 
 station7_complete = loadmat(data_path)  
-date_slice = np.s_[238:244]
+# date_slice = np.s_[238:244]
+date_slice = np.s_[180:244]
 pres_slice = np.s_[:450]
 
 masked_temp = np.ma.masked_invalid(np.squeeze(station7_complete['tems'])).T
@@ -30,8 +31,9 @@ longitude = np.squeeze(station7_complete['lon'])
 dim_time = len(date_series)
 dim_pres = masked_pres.shape[1]
 with netCDF4.Dataset(output_path, mode='w', format='NETCDF4') as ds:
-    ds.description = '''Station 7 series from 2018-10-2 12:1117h to
-        2019-4-8 15:57:11)'''
+    # ds.description = '''Station 7 series from 2018-10-2 12:1117h to
+    #     2019-4-8 15:57:11)'''
+    
     ds.title = 'Station 7 CTD temperature'
 
     # dimensions

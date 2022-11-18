@@ -386,9 +386,6 @@ def main():
     else:
         pool_arguments = [[pres[i, :], temps[i, :], args] for i in range(len(dates))]
 
-        pool_arguments.append(reference_arguments)
-    print(pool_arguments)
-
     print('Time used to read data and generate arguments: ', time.time() - t_0)
 
     print('Begining DE fit...')

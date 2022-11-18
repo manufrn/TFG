@@ -277,7 +277,7 @@ def animate_profile_evolution(df, tems, pres, start_number, final_number, number
     ax.set_xlim((10, 20))
     ax.set_xlabel('Temperatura (ºC)')
     ax.set_ylabel('Profundidad (mb)')
-    ax.set_ylim(pres[-1] + 10, 0)
+    ax.set_ylim(np.max(pres) + 5, 0)
     ax.set_xlim(9.5, 18)
     fig.tight_layout()
 
@@ -288,12 +288,12 @@ def animate_profile_evolution(df, tems, pres, start_number, final_number, number
                                          'pad': 5}, transform=ax.transAxes, ha='center')
 
     def animate(i):
-        points.set_data(tems[:, i], pres)
+        points.set_data(tems[i], pres[i])
         line.set_data(fit_function(zz, df, i), zz)
         mld.set_data((9.5, 18), (df.iloc[i, 3], df.iloc[i, 3]))
         title.set_text('{}'.format(df['Dates'][i]))
 
-    ani = FuncAnimation(fig, animate, frames=numbers, interval=80)
+    ani = FuncAnimation(fig, animate, frames=numbers, interval=40)
     ani.save(reports_dir / 'movies' / filename)
 
 

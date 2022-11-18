@@ -11,7 +11,7 @@ import h5py
 import netCDF4
 import scipy.io
 import jax
-from numba import jit
+from numba import njit
 from scipy.optimize import OptimizeResult
 
 def parse_args():
@@ -19,10 +19,12 @@ def parse_args():
 
     parser.add_argument('datafile', help='File containing data to be fitted')
 
-    # Assist fit
+    # Assist fit 
     parser.add_argument('--reference_fit', type=str, default=None, 
                         help='File containing results of SHDR fit \
                         for a reference time series')
+    parser.add_argument('-c', '--continous_fit', action='store_true')
+
 
     # Genetics
     parser.add_argument('--cross_probability', type=float, default=0.5)
@@ -133,36 +135,63 @@ def get_fit_limits(z, y, args):
     
     return lims_min, lims_max
 
+# def limits_from_previous(z, y, previous_result, args):
+#     previous_result = previous_result[:-2]
+#     negative_sign_locs = np.where(np.sign(previous_result) == -1)[0]
+#
+#     # only set limits of 
+#     lims_min = previous_result * 0.1
+#     lims_max = previous_result * 10
+#
+#     for i in negative_sign_locs:
+#         lims_max[i], lims_min[i] = lims_min[i], lims_max[i]
+#
+#     lims_min_standard, lims_max_standard = get_fit_limits(z, y, args)
+    #
+    # lims_min = np.where(abs(lims_min) > abs(lims_min_standard), lims_min, lims_min_standard)
+    # lims_max = np.where(abs(lims_max) < abs(lims_max_standard), lims_max, lims_max_standard)
+    #
+    # return lims_min, lims_max
+
 def limits_from_previous(z, y, previous_result, args):
-    previous_result = previous_result[:-2]
-    negative_sign_locs = np.where(np.sign(previous_result) == -1)[0]
-
-    lims_min = previous_result * 0.1
-    lims_max = previous_result * 10
-
-    for i in negative_sign_locs:
-        lims_max[i], lims_min[i] = lims_min[i], lims_max[i]
-
-    lims_min_standard, lims_max_standard = get_fit_limits(z, y, args)
-
-    lims_min = np.where(abs(lims_min) > abs(lims_min_standard), lims_min, lims_min_standard)
-    lims_max = np.where(abs(lims_max) < abs(lims_max_standard), lims_max, lims_max_standard)
-
-    return lims_min, lims_max
-
-def limits_from_reference(z, y, reference, args):
-    '''Given SHDR fit parametres from reference, get limits
-    for new fit that are consistent with previous 
-    TODO: for the moment it just returns get_fit_limits()
-    '''
     lims_min, lims_max = get_fit_limits(z, y, args)
-    lower_b3 = reference[0] - reference[1]
-    upper_b3 = reference[0] + reference[1]
-    lims_min[3], lims_max[3] = lower_b3, upper_b3
+
+    slice = np.s_[[0, 3, 4, 5]]
+    updated_lims_min = previous_result[slice]*0.8
+    updated_lims_max = previous_result[slice]*1.2
+
+    # for i in np.where(np.sign(previous_result) == -1)[0]:
+    #     updated_lims_max[i], updated_lims_min[i] = updated_lims_min[i], updated_lims_max[i]
+
+    updated_lims_min = np.where(abs(updated_lims_min) > abs(lims_min[slice]), updated_lims_min, lims_min[slice])
+    updated_lims_max = np.where(abs(updated_lims_max) < abs(lims_max[slice]), updated_lims_max, lims_max[slice])
+
+    lims_min[slice] = updated_lims_min
+    lims_max[slice] = updated_lims_max
+    
 
     return lims_min, lims_max
 
-@jit(nopython=True)
+def b3_lims_from_reference(date, args):
+    '''Given dataframe of reference fit, calculate mean and std
+    of b3 values in that dataframe and generate a list the same
+    length as date containing (mean - std) and (mean + std) in every
+    value. This might be subject to changes depending on what reference
+    is used.
+    '''
+    
+    df_reference = pd.read_csv(args.reference_fit)
+    b3_mean = np.mean(df_reference['b3'])
+    b3_std = np.std(df_reference['b3'])
+
+    b3_min = b3_mean - b3_std
+    b3_max = b3_mean + b3_std
+    
+    b3_lims = [[b3_min, b3_max] for _ in range(len(date))]
+    return b3_lims
+
+
+@njit
 def fit_function(individuals, z, limit):
     '''Estimate the function a group of individuals at a height z'''
 		
@@ -178,13 +207,13 @@ def fit_function(individuals, z, limit):
     return a1 + pos * (b3 * (z - D1) + a2 * (np.exp(exponent) - 1.0))
 
 
-def random_init_population(z, y, args):
+def random_init_population(lims, args):
     ''' Returns a random population of solutions of size num_individuals 
     initialized randomly with values inside limits for a profile with meassures
     y at heights z '''
     
     n = args.num_individuals 
-    lims_min, lims_max = get_fit_limits(z, y, args)
+    lims_min, lims_max = lims
     n_var = np.size(lims_max)
     
     norm = lims_max - lims_min
@@ -192,7 +221,7 @@ def random_init_population(z, y, args):
     return individuals
     
 
-@jit(nopython=True)
+@njit
 def RMS_fitness(individuals, z, y, exp_limit):
     '''Estimate the fitting for a group of individuals via mean squared error'''
     
@@ -219,7 +248,7 @@ def modified_fitness(individuals, z, y, args, MLD, a, c,):
                              * (1 + alpha[:, None] * penalty_f(z, MLD, a, c)), axis=1) / len(y))
     return fitness
 
-@jit(nopython=True)
+# @njit
 def diferential_evolution(individuals, z, y, lims, fitness_func, exp_limit, num_individuals, 
                           num_generations, mutation_factor, cross_probability, tol,
                           penalty_args = None):
@@ -280,7 +309,7 @@ def diferential_evolution(individuals, z, y, lims, fitness_func, exp_limit, num_
     # result = best_fit, present_fitns[best_fit_loc]
     return best_fit, present_fitns[best_fit_loc]
     
-def fit_profile(z, y, args, previous_result = None, reference=None): 
+def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None): 
     '''Parse and fit data from a single profile'''
 
     # remove masks and work with normal arrays
@@ -297,27 +326,32 @@ def fit_profile(z, y, args, previous_result = None, reference=None):
         z = z[:max_z_idx]
         y = y[:max_z_idx]
     
+    # if the profile doesn't have enough observations, return an array of nans
     if len(z) < args.min_obs:
-        return 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.99, 9999.9
-    
+        return np.full(8, np.nan)
+
     if isinstance(previous_result, np.ndarray):        
         lims_min, lims_max = limits_from_previous(z, y, previous_result, args)
+        add = 0
 
     else:
         lims_min, lims_max = get_fit_limits(z, y, args)
-    
-    # else:
-    #     lims_min, lims_max = limits_from_reference(z, y, reference, args)
+        if args.continous_fit:
+            add = +1000
+        else:
+            add = 0
+
+    if b3_reference_lims != None:
+        lims_min[3], lims_max[3] = b3_reference_lims
 
     lims = (lims_min, lims_max)
 
-    first_gen = random_init_population(z, y, args)
+    first_gen = random_init_population(lims, args)
     result_1, fitnss_1 = diferential_evolution(first_gen, z, y, lims, RMS_fitness, args.exp_limit, 
-                                     args.num_individuals, args.num_generations, args.mutation_factor, 
+                                     args.num_individuals, args.num_generations + add, args.mutation_factor, 
                                      args.cross_probability, args.tol)  
 
     #### DELTA CODING ####
-    
     # set new limits for fit in function of previous fit result
     # and have them meet the physical limits
     v_min, v_max = 0.85 * result_1, 1.15 * result_1
@@ -328,7 +362,7 @@ def fit_profile(z, y, args, previous_result = None, reference=None):
         lims_max[i] = max(lims_max[i], lim_max_d)
     lims_delta = (lims_min, lims_max)
 
-    first_gen = random_init_population(z, y, args)   # new first generation
+    first_gen = random_init_population(lims_delta, args)   # new first generation
 
     if args.bias_parametres == None:
         result_delta, fitnss_delta = diferential_evolution(first_gen, z, y, lims, RMS_fitness, args.exp_limit, 
@@ -380,24 +414,6 @@ def save_results(lat, lon, dates, results, args):
 
     results_df.to_csv(output_path, index=False, mode='w+')
 
-def generate_reference_arguments(date, args):
-
-    df_reference = pd.read_csv(args.reference_fit)
-
-    idx = np.searchsorted(date, df_reference['Dates'])
-    array_reference = df_reference.to_numpy()[:, 3:] # convert dataframe to array
-                                                     # and remove date, lat, lon
-    b3_mean = np.mean(df_reference['b3'])
-    b3_std = np.std(df_reference['b3'])
-    del df_reference
-
-    reference_arguments = []
-    for i in range(len(date)):
-        l = i >= idx
-        i = len(l) - np.argmax(l[::-1]) - 1
-        # reference_arguments.append(array_reference[i])
-        reference_arguments.append([b3_mean, b3_std])
-    return reference_arguments
 
 
 def main():
@@ -405,7 +421,10 @@ def main():
     
     t_0 = time.time()
     
-    lat, lon, pres, temps, dates = extract_data_from_file(args)
+    lat, lon, pres, temp, date = extract_data_from_file(args)
+    pres = pres[:2000]
+    date = date[:2000]
+    temp = temp[:2000]
     # pool_arguments = [[pres[i, :], temps[i, :], args] for i in range(len(dates))]
     
     # check for reference_fit and construct argument list for pool
@@ -427,14 +446,16 @@ def main():
     # with mp.Pool(processes=mp.cpu_count()) as pool:
     #     results_fit = pool.starmap(fit_profile, tqdm.tqdm(pool_arguments,
     #                                                       total=len(pool_arguments)), chunksize=1)
-    results_fit = []
-    results_fit.append(fit_profile(pres[0], temps[0], args))
-    t_0_0 = time.time()
-    for k in tqdm(range(1, len(dates))):
-        results_fit.append(fit_profile(pres[k], temps[k], args, results_fit[k - 1]))
     
-    print(time.time() - t_0_0)
-    save_results(lat, lon, dates, results_fit, args)
+
+    b3_lims = b3_lims_from_reference(date, args)
+    results_fit = []
+    results_fit.append(fit_profile(pres[0], temp[0], args, b3_reference_lims=b3_lims[0]))
+    
+    for k in tqdm(range(1, len(date))):
+        results_fit.append(fit_profile(pres[k], temp[k], args, results_fit[k - 1], b3_lims[k]))
+    
+    save_results(lat, lon, date, results_fit, args)
     
     print('Elapsed time: {:.2f} seconds'.format(time.time() - t_0))
 
