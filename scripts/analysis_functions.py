@@ -10,7 +10,7 @@ import matplotlib.dates as mdates
 from datetime import datetime, timedelta
 from config import data_dir, reports_dir
 
-def load_time_series(filename, convert_date=True):
+def load_time_series(filename, latlon= False, convert_date=True):
     '''Load time series saved as filename in data_dir/time_series
     '''
 
@@ -19,14 +19,18 @@ def load_time_series(filename, convert_date=True):
     if filename.endswith('.h5'):
         with h5py.File(file_path, 'r') as f:
             temp = np.array(f['temperature'])
-            pres = np.array(f['pressure'])
+            depth = np.array(f['pressure'])
             date = np.array(f['date'])
             lat = np.array(f['lat'])
             lon = np.array(f['lon'])
+
     if filename.endswith('.nc'):
         with netCDF4.Dataset(file_path, 'r') as ds:
             temp = ds.variables['temp'][:]
-            pres = ds.variables['pres'][:]
+            try:
+                depth = ds.variables['pres'][:]
+            except:
+                depth = ds.variables['depth'][:]
             date = ds.variables['date'][:]
             lat = ds.variables['lat'][:]
             lon = ds.variables['lon'][:]
@@ -34,15 +38,22 @@ def load_time_series(filename, convert_date=True):
         raise Exception('Only .h5 and .nc time series supported')
 
     if convert_date:
-        date = np.array([datetime.fromtimestamp(i) for i in date])
+        date = np.array([datetime.utcfromtimestamp(i) for i in date])
+    
+    if latlon:
+        return temp, depth, date, lat, lon
 
-    return temp, pres, date, lat, lon
-
-def masked_to_array(masked_array):
-    if isinstance(masked_array, np.ma.core.MaskedArray):
-        return np.asarray(masked_array[masked_array.mask == False])
     else:
-        return masked_array
+        return temp, depth, date
+
+def if_masked_to_array(array):
+    '''CHech if given array is maked and return a standard ndarray version
+    of it whithout the false values of the mask'''
+
+    if isinstance(array, np.ma.core.MaskedArray):
+        return np.asarray(array[array.mask == False])
+    else:
+        return array
     
 def load_SHDR_fit(filename):
     '''Load  saved SHDR fit as filename in data_dir/SHDR_fit.
@@ -51,7 +62,11 @@ def load_SHDR_fit(filename):
 
     file_path = data_dir / 'SHDR_fit' / filename
     df_fit = pd.read_csv(file_path)
-    df_fit['Dates'] = df_fit['Dates'].apply(lambda x: datetime.fromtimestamp(x))
+    try:
+        df_fit['Dates'] = df_fit['Dates'].apply(lambda x: datetime.utcfromtimestamp(x))
+
+    except:
+        df_fit['Dates'] = df_fit['date'].apply(lambda x: datetime.utcfromtimestamp(x))
     return df_fit
      
 
@@ -79,7 +94,7 @@ def date_to_iloc(dates, date):
         value = 1
         while True:
             dt = sign*value
-            possible_date = date + timedelta(seconds=dt)
+            possible_date = date + timedelta(seconds=dt) 
             if date + timedelta(seconds=dt) in dates:
                 iloc =  np.where(dates==possible_date)[0][0]
             
@@ -97,6 +112,10 @@ def timedelta_to_interval(timedelta, dt=5):
         interval = np.int(np.round(timedelta.total_seconds() / dt))
         return interval
 
+
+def mean_and_std(df_fit, variable):
+    variable = df_fit[variable]
+    return variable.mean(), variable.std()
 
 
 def fit_function(z, df, loc):
@@ -147,7 +166,7 @@ def plot_fit_variable(df, variable, lims = [None, None], interval=None):
     plt.show()
 
 
-def plot_profile_fit(df, temp, pres, loc):
+def plot_profile_fit(df, temp, depth, loc):
     '''Plot measured vertical profile and fit for measure at loc
     '''
 
@@ -155,12 +174,12 @@ def plot_profile_fit(df, temp, pres, loc):
         loc = date_to_iloc(df['Dates'], loc)
         print(loc)
 
-    zz = np.linspace(0, pres[-1] + 5, 300)
+    zz = np.linspace(0, depth[-1] + 5, 300)
 
     fig, ax = plt.subplots(figsize=(4, 4.6875))
-    ax.scatter(temp[loc], pres[loc], marker='o', fc='None', ec='tab:red', s=22)
+    ax.scatter(temp[loc], depth[loc], marker='o', fc='None', ec='tab:red', s=22)
     ax.axhline(df.iloc[loc, 3], c='grey', ls='--') # plot MLD
-    ax.set_ylim(pres[-1] + 10, 0)
+    ax.set_ylim(depth[-1] + 10, 0)
     ax.set_xlim(9.5, 18)
     ax.plot(fit_function(zz, df, loc), zz)
     ax.set_xlabel('Temperature (ºC)')
@@ -170,7 +189,7 @@ def plot_profile_fit(df, temp, pres, loc):
     plt.show()
 
 
-def fitness(df, temp, pres, loc):
+def fitness(df, temp, depth, loc):
     ''' Get RMS for profile in loc at height z 
     ''' 
 
@@ -178,11 +197,11 @@ def fitness(df, temp, pres, loc):
         loc = date_to_iloc(df['Dates'], loc)
 
     temp_loc = temp[:, loc]
-    fitness = np.sqrt(np.sum((temp_loc - fit_function(pres, df, loc))**2) / len(temp_loc))
+    fitness = np.sqrt(np.sum((temp_loc - fit_function(depth, df, loc))**2) / len(temp_loc))
     return fitness
     
 
-def plot_RMS_fit(df, temp, pres, loc):
+def plot_RMS_fit(df, temp, depth, loc):
     ''' Plot experimental profile and fit with diference between fit and profile,
     and square of that difference.
     '''
@@ -190,27 +209,27 @@ def plot_RMS_fit(df, temp, pres, loc):
     if isinstance(loc, datetime):
         loc = date_to_iloc(df['Dates'], loc)
     
-    delta = temp[:, loc] - fit_function(pres, df, loc)
-    zz = np.linspace(0, pres[-1] + 5, 300)
+    delta = temp[:, loc] - fit_function(depth, df, loc)
+    zz = np.linspace(0, depth[-1] + 5, 300)
     fig, [ax1, ax2, ax3] = plt.subplots(1, 3, figsize = (7.5, 3.75))
     
-    ax1.scatter(temp[:, loc], pres, marker='o', fc='None', ec='tab:red', s=22)
+    ax1.scatter(temp[:, loc], depth, marker='o', fc='None', ec='tab:red', s=22)
     ax1.axhline(df.iloc[loc, 3], c='grey', ls='--') # plot MLD
-    ax1.set_ylim(pres[-1] + 10, 0)
+    ax1.set_ylim(depth[-1] + 10, 0)
     ax1.set_xlim(9.5, 18)
     ax1.plot(fit_function(zz, df, loc), zz)
     ax1.set_xlabel('Temperature (ºC)')
     ax1.set_ylabel('Depth (mb)')
     
     ax2.set_xlabel('$\Delta$')
-    ax2.scatter(delta, pres)
-    ax2.set_ylim(pres[-1] + 10, 0)
+    ax2.scatter(delta, depth)
+    ax2.set_ylim(depth[-1] + 10, 0)
     ax2.set_xlim(-max(abs(delta)) -0.01, max(abs(delta)) + 0.01)
     ax2.tick_params(left=False)
     
-    ax3.barh(pres, delta**2, height=2)
+    ax3.barh(depth, delta**2, height=2)
     ax3.set_xlabel('$\Delta^2$')
-    ax3.set_ylim(pres[-1] + 10, 0)
+    ax3.set_ylim(depth[-1] + 10, 0)
     ax3.tick_params(left=False)
     fig.suptitle(df['Dates'].iloc[loc])
     fig.tight_layout()
@@ -235,7 +254,7 @@ def modified_fitness(individuals, z, y, args, MLD, a, c,):
     return fitness
 
 
-def plot_multiple_profiles(df, temp, pres, locs):
+def plot_multiple_profiles(df, temp, depth, locs):
     
     n = len(locs)
     for loc in locs:
@@ -246,21 +265,24 @@ def plot_multiple_profiles(df, temp, pres, locs):
         raise Exception('This function can only plot an even number \
                         of profiles, {:.0f} were given'.format(n))
 
-    max_ylim = np.max(pres) + 10
+    max_ylim = np.max(depth) + 10
     zz = np.linspace(0, max_ylim, 300)
 
     fig, axes = plt.subplots(int(n/2), 2, figsize=(6.5, n/2*3))
     axes = axes.reshape(n)
 
     for ax, loc in zip(axes, locs):
-        temp_loc = masked_to_array(temp[loc])
-        pres_loc = masked_to_array(pres[loc])
-        ax.scatter(temp_loc, pres_loc, marker='o', fc='None', ec='tab:red')
+        temp_loc = if_masked_to_array(temp[loc])
+        depth_loc = if_masked_to_array(depth[loc])
+        ax.scatter(temp_loc, depth_loc, marker='o', fc='None', ec='tab:red')
         ax.axhline(df.iloc[loc, 3], c='grey', ls='--')
         ax.set_ylim(max_ylim, 0)
         ax.set_xlim(9.5, 18)
 
         ax.plot(fit_function(zz, df, loc), zz)
+
+        ax.text(0.7, 0.1, 'em{:.2f}'.format(df.loc[loc, 'em']), bbox={'facecolor': 'w', 'alpha': 0.5,
+                                         'pad': 5}, transform=ax.transAxes, ha='center')
         ax.set_xlabel('Temperature (ºC)')
         ax.set_ylabel('Depth (mb)')
         ax.set_title(df['Dates'].iloc[loc])
@@ -269,7 +291,7 @@ def plot_multiple_profiles(df, temp, pres, locs):
     plt.show()
 
 
-def animate_profile_evolution(df, tems, pres, start_number, final_number, number_plots, filename):
+def animate_profile_evolution(df, tems, depth, start_number, final_number, number_plots, filename):
     numbers = np.linspace(start_number, final_number, number_plots, dtype='int')
     zz = np.linspace(0, 175, 300)
 
@@ -277,7 +299,7 @@ def animate_profile_evolution(df, tems, pres, start_number, final_number, number
     ax.set_xlim((10, 20))
     ax.set_xlabel('Temperatura (ºC)')
     ax.set_ylabel('Profundidad (mb)')
-    ax.set_ylim(np.max(pres) + 5, 0)
+    ax.set_ylim(np.max(depth) + 5, 0)
     ax.set_xlim(9.5, 18)
     fig.tight_layout()
 
@@ -288,18 +310,25 @@ def animate_profile_evolution(df, tems, pres, start_number, final_number, number
                                          'pad': 5}, transform=ax.transAxes, ha='center')
 
     def animate(i):
-        points.set_data(tems[i], pres[i])
+        points.set_data(tems[i], depth[i])
         line.set_data(fit_function(zz, df, i), zz)
         mld.set_data((9.5, 18), (df.iloc[i, 3], df.iloc[i, 3]))
         title.set_text('{}'.format(df['Dates'][i]))
 
-    ani = FuncAnimation(fig, animate, frames=numbers, interval=40)
+    ani = FuncAnimation(fig, animate, frames=numbers, interval=70)
     ani.save(reports_dir / 'movies' / filename)
 
 
-def plot_thermistor_series(temp, pres, date, i, wide='True', lims=[None, None], interval=None):
+def plot_thermistor_temperature(temp, depth, date, i, wide='True', lims=[None, None], interval=None):
     '''Plot a single thermistor temperature series 
     '''
+
+    if isinstance(temp, np.ma.core.MaskedArray):
+        date = date[temp[:, i].mask==False]
+        temp = if_masked_to_array(temp[:, i])
+        depth = if_masked_to_array(depth[:, i])
+
+
     if isinstance(lims[0], datetime):
         lims[0] = date_to_iloc(date, lims[0])
 
@@ -309,8 +338,10 @@ def plot_thermistor_series(temp, pres, date, i, wide='True', lims=[None, None], 
     if isinstance(interval, timedelta):
         inteval = timedelta_to_interval()
 
+
     date = date[lims[0]:lims[1]:interval]
-    temp = temp[i, lims[0]:lims[1]:interval]
+    temp = temp[lims[0]:lims[1]:interval]
+    depth = depth[lims[0]:lims[1]:interval]
 
     
     locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
@@ -320,16 +351,17 @@ def plot_thermistor_series(temp, pres, date, i, wide='True', lims=[None, None], 
         fig, ax = plt.subplots(figsize=(7, 3.75))
     else: 
         fig, ax = plt.subplots()
+
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
     ax.plot(date, temp)
-    ax.set_title(f'Temperature at depth {pres[i]} db (ºC)')
+    ax.set_title(f'Temperature at depth {depth[0]} db (ºC)')
     ax.set_xlabel('Date')
     fig.tight_layout()
     plt.show()
     
 
-def plot_column_temperature(temp, pres, date, lims = [None, None], interval=None):
+def plot_column_temperature(temp, depth, date, lims = [None, None], interval=None):
 
     if isinstance(lims[0], datetime):
         lims = [date_to_iloc(date, lim) for lim in lims]
@@ -349,30 +381,30 @@ def plot_column_temperature(temp, pres, date, lims = [None, None], interval=None
     fig, ax = plt.subplots()
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
-    ax.set_ylim(pres[-1] + 10, 0)
-    # for i in pres:
+    ax.set_ylim(depth[-1] + 10, 0)
+    # for i in depth:
     #     ax.axhline(i)
-    im = ax.pcolormesh(date, pres, temp, cmap=cmap, norm=norm)
+    im = ax.pcolormesh(date, depth, temp, cmap=cmap, norm=norm)
     fig.colorbar(im)
     fig.tight_layout()
     plt.show()
 
 
-def find_thermocline_thermistors(df, pres, temp, loc):
+def find_thermocline_thermistors(df, depth, temp, loc):
     '''
     TODO
     ''' 
     df = df.iloc[loc]
     mld = df['D1'][loc]
-    idx = np.where(pres < mld)
-    pres = np.delete(pres, idx, axis=0)
+    idx = np.where(depth < mld)
+    depth = np.delete(depth, idx, axis=0)
 
     perm_thermocline = lambda z: df['a3'][loc] - df['a2'][loc] + df['b3'][loc] * (z - mld)
     
     max_delta = 1
     
     thermocline_therm = []
-    for i, depth in enumerate(pres):
+    for i, depth in enumerate(depth):
         if abs(perm_thermocline(depth) - temp[i, loc]) >= max_delta:
             thermocline_therm.append(depth)
 

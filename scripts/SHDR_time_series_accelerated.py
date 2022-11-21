@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 import time
-from tqdm import tqdm
 import argparse
+import h5py
+import netCDF4
+import numpy as np
+import pandas as pd
 import multiprocessing as mp
 from datetime import date
 from pathlib import Path
-import pandas as pd
-import numpy as np
-import h5py
-import netCDF4
-import scipy.io
-import jax
-from numba import njit
+from numba import njit, prange
+from tqdm import tqdm
+from scipy.io import loadmat
 from scipy.optimize import OptimizeResult
 
 def parse_args():
@@ -43,18 +42,18 @@ def parse_args():
     parser.add_argument('--min_obs', type=int, default=10)
     
     # Misc
-    parser.add_argument('--results_folder', type=str, default='/home/manu/TFG_repo/data/SHDR_fit')
+    parser.add_argument('--output_dir', type=str, default='/home/manu/TFG_repo/data/SHDR_fit')
     parser.add_argument('--output_file', type=str, default=None)
-    parser.add_argument('--tol', type=float, default=0.0025)
+    parser.add_argument('--tol', type=float, default=0.00025)
     parser.add_argument('--seed', type=int, default=111)
     
     return parser.parse_args()
 
 
 def extract_data_from_file(args, sal=False):
-
     fn = args.datafile
-    # for .mat files
+
+    # for hdf5 files
     if fn.endswith('.h5'):
         with h5py.File(fn, 'r') as data:
             temp = np.array(data['temperature'])
@@ -65,8 +64,9 @@ def extract_data_from_file(args, sal=False):
         return lat, lon, pres, temp, date
         
 
+    # for .mat files
     if fn.endswith('.mat'):
-        data = scipy.io.loadmat(fn)
+        data = loadmat(fn)
 
         lat = data['lat'][0]
         lon = data['lon'][0]
@@ -79,7 +79,7 @@ def extract_data_from_file(args, sal=False):
         return lat, lon, pres, temp, dates
     
 
-    # for netCDF4 files:
+    # for netCDF4 files
     elif fn.endswith('.nc'):
         with netCDF4.Dataset(fn, 'r') as ds:
 
@@ -98,12 +98,15 @@ def extract_data_from_file(args, sal=False):
                 day = '%s%s' % (dateref[6], dateref[7])
 
                 origin = datetime.date(int(year), int(month), int(day))
-                return None
+                return None # not implemented hehe
     
             else:
                 lat = ds.variables['lat'][:]
                 lon = ds.variables['lon'][:]
-                pres = ds.variables['pres'][:]
+                try:
+                    pres = ds.variables['depth'][:]
+                except:
+                    pres = ds.variables['pres'][:]
                 temp = ds.variables['temp'][:]
                 date = ds.variables['date'][:]
 
@@ -128,30 +131,12 @@ def get_fit_limits(z, y, args):
             [0.0 if max_z < args.min_depth else - abs((max_y - min_y) / (max_z - min_z)), 0.0], # b3
             [0.0, max_y - min_y],     # a2
             [min_y, max_y]])          # a1
-            
 
     lims_min = lims[:, 0]
     lims_max = lims[:, 1]
     
     return lims_min, lims_max
 
-# def limits_from_previous(z, y, previous_result, args):
-#     previous_result = previous_result[:-2]
-#     negative_sign_locs = np.where(np.sign(previous_result) == -1)[0]
-#
-#     # only set limits of 
-#     lims_min = previous_result * 0.1
-#     lims_max = previous_result * 10
-#
-#     for i in negative_sign_locs:
-#         lims_max[i], lims_min[i] = lims_min[i], lims_max[i]
-#
-#     lims_min_standard, lims_max_standard = get_fit_limits(z, y, args)
-    #
-    # lims_min = np.where(abs(lims_min) > abs(lims_min_standard), lims_min, lims_min_standard)
-    # lims_max = np.where(abs(lims_max) < abs(lims_max_standard), lims_max, lims_max_standard)
-    #
-    # return lims_min, lims_max
 
 def limits_from_previous(z, y, previous_result, args):
     lims_min, lims_max = get_fit_limits(z, y, args)
@@ -160,15 +145,21 @@ def limits_from_previous(z, y, previous_result, args):
     updated_lims_min = previous_result[slice]*0.8
     updated_lims_max = previous_result[slice]*1.2
 
-    # for i in np.where(np.sign(previous_result) == -1)[0]:
-    #     updated_lims_max[i], updated_lims_min[i] = updated_lims_min[i], updated_lims_max[i]
+    # if previous_result[1] >= 1e-4:
+    #     updated_lim_max[1] = previous_result[1]*
+    # updated_lims_max = previous_result[]
 
     updated_lims_min = np.where(abs(updated_lims_min) > abs(lims_min[slice]), updated_lims_min, lims_min[slice])
     updated_lims_max = np.where(abs(updated_lims_max) < abs(lims_max[slice]), updated_lims_max, lims_max[slice])
 
+    lims_min[1] = previous_result[1] * 0.5
+    lims_max[1] = previous_result[1] * 2
+    
     lims_min[slice] = updated_lims_min
     lims_max[slice] = updated_lims_max
-    
+
+    # if previous_result[1] >=1e-5:
+    #     lims_max[1] = previous_result[1]*1.5
 
     return lims_min, lims_max
 
@@ -248,10 +239,11 @@ def modified_fitness(individuals, z, y, args, MLD, a, c,):
                              * (1 + alpha[:, None] * penalty_f(z, MLD, a, c)), axis=1) / len(y))
     return fitness
 
-# @njit
+
+@njit
 def diferential_evolution(individuals, z, y, lims, fitness_func, exp_limit, num_individuals, 
                           num_generations, mutation_factor, cross_probability, tol,
-                          penalty_args = None):
+                          penalty_args=None):
     n = num_individuals
     lims_min, lims_max = lims
     n_var = lims_max.size
@@ -295,15 +287,20 @@ def diferential_evolution(individuals, z, y, lims, fitness_func, exp_limit, num_
 
         new_fitns_bcst = np.broadcast_to(np.expand_dims(new_fitns, axis=1), individuals.shape)
         present_fitns_bcst = np.broadcast_to(np.expand_dims(present_fitns, axis=1), individuals.shape)
+
         # update individuals to new generation
         individuals = np.where(present_fitns_bcst < new_fitns_bcst, individuals, new_gen)
         present_fitns = np.where(present_fitns < new_fitns, present_fitns, new_fitns)
 
         best_fit_loc = present_fitns.argmin()
         best_fit = individuals[best_fit_loc]
+        best_fitness = present_fitns[best_fit_loc]
         
         if present_fitns.mean() * tol / present_fitns.std() > 1:
             break
+
+        # if best_fitness < tol:
+        #     break
     
     # result = OptimizeResult(x = best_fit, fun = present_fitns[best_fit_loc])
     # result = best_fit, present_fitns[best_fit_loc]
@@ -354,12 +351,19 @@ def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None):
     #### DELTA CODING ####
     # set new limits for fit in function of previous fit result
     # and have them meet the physical limits
-    v_min, v_max = 0.85 * result_1, 1.15 * result_1
-    for i in range(6):
-        lim_min_d = min(v_min[i], v_max[i])
-        lim_max_d = max(v_min[i], v_max[i])
-        lims_min[i] = max(lims_min[i], lim_min_d)
-        lims_max[i] = max(lims_max[i], lim_max_d)
+    
+    lims_min_delta, lims_max_delta = 0.85 * result_1, 1.15 * result_1
+    for i in np.where(np.sign(result_1) < 0)[0]:
+        lims_min_delta[i], lims_max_delta[i] = lims_max_delta[i], lims_min_delta[i]
+
+
+    lims_min = np.where(lims_min_delta >= lims_min, lims_min_delta,  lims_min)
+    lims_max = np.where(lims_max_delta <= lims_max, lims_max_delta, lims_max)
+
+    if args.continous_fit and b3_reference_lims != None:
+        lims_min[1], lims_min[2] = 0.0, 0.0
+        lims_max[1], lims_max[2] = args.max_b2_c2, args.max_b2_c2
+
     lims_delta = (lims_min, lims_max)
 
     first_gen = random_init_population(lims_delta, args)   # new first generation
@@ -399,9 +403,10 @@ def save_results(lat, lon, dates, results, args):
     if len(lat) == 1:
         lat = np.array([lat for _ in range(len(dates))])
         lon = np.array([lon for _ in range(len(dates))])
+    
     # Convert results list to pd.Dataframe and save as .csv
     results_df = pd.DataFrame(results, columns=columns)
-    results_df.insert(0, 'Dates', dates)
+    results_df.insert(0, 'date', dates)
     results_df.insert(1, 'lat', lat)
     results_df.insert(2, 'lon', lon)
     
@@ -410,9 +415,22 @@ def save_results(lat, lon, dates, results, args):
     else:
         output_file = '{}_fit.csv'.format(Path(args.datafile).stem)
         
-    output_path = Path(args.results_folder) / output_file
 
-    results_df.to_csv(output_path, index=False, mode='w+')
+#     metadata_string = f'''Fit for time series {Path(args.datafile).name}
+# Parametres of fit:
+# continous_fit = {args.continous_fit}
+# cross_probability = {args.cross_probability}
+# mutation_factor = {args.mutation_factor}
+# num_generations = {args.num_generations}
+# max_b2_c2 = {args.max_b2_c2}
+# exp_limit = {args.exp_limit}
+# tol = {args.tol}'''
+
+    output_path = Path(args.output_dir) / output_file
+    with open(output_path, 'w+') as f:
+        # f.write(metadata_string)
+        
+        results_df.to_csv(f, index=False, mode='w+')
 
 
 
@@ -422,42 +440,30 @@ def main():
     t_0 = time.time()
     
     lat, lon, pres, temp, date = extract_data_from_file(args)
-    pres = pres[:2000]
-    date = date[:2000]
-    temp = temp[:2000]
-    # pool_arguments = [[pres[i, :], temps[i, :], args] for i in range(len(dates))]
-    
-    # check for reference_fit and construct argument list for pool
-    # that contains the reference (parametres of fit) that each fit should 
-    # have depending on their date
-    # if args.reference_fit != None:
-    #     reference_arguments = generate_reference_arguments(dates, args)
-    #     pool_arguments = [[pres[i, :], temps[i, :], args, reference_arguments[i]] for i in range(len(dates))]
-    #
-    # else:
-    #     pool_arguments = [[pres[i, :], temps[i, :], args] for i in range(len(dates))]
-
-        # pool_arguments.append(reference_arguments)
-
-    # print('Time used to read data and generate arguments: ', time.time() - t_0)
+    # pres=pres[:200]
+    # temp=temp[:200]
+    # date=date[:200]
 
     print('Begining DE fit...')
+    
+    if args.continous_fit and args.reference_fit != None:
+        b3_lims = b3_lims_from_reference(date, args)
+        results_fit = [fit_profile(pres[0], temp[0], args, b3_reference_lims=b3_lims[0])]
+        for k in tqdm(range(1, len(date))):
+            results_fit.append(fit_profile(pres[k], temp[k], args, results_fit[k - 1], b3_lims[k]))
+    
+    elif args.reference_fit != None:
+        b3_lims = b3_lims_from_reference(date, args)
+        results_fit = []
+        for k in tqdm(range(len(date))):
+            results_fit.append(fit_profile(pres[k], temp[k], args, b3_reference_lims=b3_lims[k]))
 
-    # with mp.Pool(processes=mp.cpu_count()) as pool:
-    #     results_fit = pool.starmap(fit_profile, tqdm.tqdm(pool_arguments,
-    #                                                       total=len(pool_arguments)), chunksize=1)
-    
-
-    b3_lims = b3_lims_from_reference(date, args)
-    results_fit = []
-    results_fit.append(fit_profile(pres[0], temp[0], args, b3_reference_lims=b3_lims[0]))
-    
-    for k in tqdm(range(1, len(date))):
-        results_fit.append(fit_profile(pres[k], temp[k], args, results_fit[k - 1], b3_lims[k]))
-    
+    else:
+        results_fit = []
+        for k in tqdm(range(len(date))):
+            results_fit.append(fit_profile(pres[k], temp[k], args))
+         
     save_results(lat, lon, date, results_fit, args)
-    
-    print('Elapsed time: {:.2f} seconds'.format(time.time() - t_0))
 
 if __name__ == '__main__':
     main()
