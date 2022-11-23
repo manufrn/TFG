@@ -6,9 +6,9 @@ from config import data_dir
 
 original_ts = data_dir / 'time_series' / 'processed' / 'AGL_20181116_chain.nc'
 
-output_ts = data_dir / 'time_series' / 'test' / 'test_1.nc'
+output_ts = data_dir / 'time_series' / 'test' / 'test_winter.nc'
 
-slice = np.s_[349200:362052]
+slice = np.s_[595000:622052]
 
 with netCDF4.Dataset(original_ts, 'r') as ds:
     latitude = ds.variables['lat'][:]

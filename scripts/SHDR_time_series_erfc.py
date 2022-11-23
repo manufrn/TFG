@@ -31,7 +31,7 @@ def parse_args():
     # Genetics
     parser.add_argument('-CC', '--cross_probability', type=float, default=0.5)
     parser.add_argument('--mutation_factor', type=float, default=0.5)
-    parser.add_argument('--num_generations', type=int, default=1600)
+    parser.add_argument('--num_generations', type=int, default=1200)
     parser.add_argument('--num_individuals', type=int, default=60)
 
     # Fit
@@ -133,6 +133,7 @@ def get_fit_limits(z, y, args):
     lims = np.array([[1.0, max_z],    # D1
             [0.0, args.max_b2_c2],    # b2
             [0.0, args.max_b2_c2],    # c2
+            [0.0, args.max_b2_c2],
             [0.0 if max_z < args.min_depth else - abs((max_y - min_y) / (max_z - min_z)), 0.0], # b3
             [0.0, max_y - min_y],     # a2
             [min_y, max_y]])          # a1
@@ -146,7 +147,7 @@ def get_fit_limits(z, y, args):
 def limits_from_previous(z, y, previous_result, args):
     lims_min, lims_max = get_fit_limits(z, y, args)
 
-    slice = np.s_[[0, 3, 4, 5]]
+    slice = np.s_[[0, 4, 5, 6]]
     updated_lims_min = previous_result[slice]*0.8
     updated_lims_max = previous_result[slice]*1.2
 
@@ -179,9 +180,7 @@ def b3_lims_from_reference(date, args):
     b3_mean = np.mean(df_reference['b3'])
     b3_std = np.std(df_reference['b3'])
 
-    # b3_min = b3_mean - b3_std * 0.5
-    # b3_max = b3_mean + b3_std * 0.5
-    b3_min = 0.0
+    b3_min = b3_mean - b3_std
     b3_max = 0.0
     
     b3_lims = [[b3_min, b3_max] for _ in range(len(date))]
@@ -192,10 +191,10 @@ def b3_lims_from_reference(date, args):
 def fit_function(individuals, z, limit):
     '''Estimate the function a group of individuals at a height z'''
 		
-    D1, b2, c2, b3, a2, a1 = np.split(individuals, 6, axis=1)
+    D1, b2, c2, b3, a2, a1 = np.split(individuals, 7, axis=1)
 
     pos = np.where(z >= D1, 1.0, 0.0)
-    exponent = - (z -D1) * (b2 + (z - D1) * c2)
+    exponent = - (z - D1) * (b2 + (z - D1) * c2 + (z - D1) **winter)
     
     # chech if exponent is inside limits
     exponent = np.where(exponent > limit, limit, exponent)
@@ -221,11 +220,12 @@ def random_init_population(lims, args):
 @njit
 def RMS_fitness(individuals, z, y, k, exp_limit):
     '''Estimate the fitting for a group of individuals via mean squared error'''
-    if k == 0.0: 
-        weight = np.ones((individuals.shape[0], len(z)))
-    else:
-        weight = np.broadcast_to(np.expand_dims(np.exp(-k * (z - min(z))), axis=0), (individuals.shape[0], len(z)))
-    fitness = np.sqrt(np.sum(weight*(y - fit_function(individuals, z, exp_limit))**2, axis=1) / len(y))
+    # if k == 0.0: 
+    #     weight = np.ones((individuals.shape[0], len(z)))
+    # else:
+    #     weight = np.broadcast_to(np.expand_dims(np.exp(-k * (z - min(z))), axis=0), (individuals.shape[0], len(z)))
+    # fitness = np.sqrt(np.sum(weight*(y - fit_function(individuals, z, exp_limit))**2, axis=1) / len(y))
+    fitness = np.sqrt(np.sum((y - fit_function(individuals, z, exp_limit))**2, axis=1) / len(y))
     return fitness
     
 
@@ -310,11 +310,12 @@ def diferential_evolution(individuals, z, y, lims, k, exp_limit, num_individuals
         best_fit = individuals[best_fit_loc]
         best_fitness = present_fitns[best_fit_loc]
         
-        # if present_fitns.mean() * tol / present_fitns.std() > 1:
-        #     break
-
-        if best_fitness < tol:
+        if present_fitns.mean() * tol / present_fitns.std() > 1:
+            print('tol_reached')
             break
+
+        # if best_fitness < tol:
+        #     break
     
     # result = OptimizeResult(x = best_fit, fun = present_fitns[best_fit_loc])
     # result = best_fit, present_fitns[best_fit_loc]
@@ -339,7 +340,7 @@ def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None):
     
     # if the profile doesn't have enough observations, return an array of nans
     if len(z) < args.min_obs:
-        return np.full(8, np.nan)
+        return np.full(9, np.nan)
 
     if isinstance(previous_result, np.ndarray):        
         lims_min, lims_max = limits_from_previous(z, y, previous_result, args)
@@ -353,7 +354,7 @@ def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None):
             add = 0
 
     if b3_reference_lims != None:
-        lims_min[3], lims_max[3] = b3_reference_lims
+        lims_min[4], lims_max[4] = b3_reference_lims
 
     lims = (lims_min, lims_max)
 
@@ -402,10 +403,10 @@ def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None):
         result = result_delta
         fitnss = fitnss_delta
 
-    D1, b2, c2, b3, a2, a1 = result
+    D1, b2, c2, e3, b3, a2, a1 = result
     em = fitnss
     a3 = a1 - a2 
-    return np.array([D1, b2, c2, b3, a2, a1, a3, em])
+    return np.array([D1, b2, c2, e3, b3, a2, a1, a3, em])
     
         
 
@@ -414,8 +415,8 @@ def save_results(lat, lon, dates, results, args):
 
     print('Writing results to')
 
-    columns = ['D1', 'b2', 'c2', 'b3', 'a2', 'a1', 'a3', 'em']
-
+    columns = ['D1', 'b2', 'c2', 'e3', 'b3', 'a2', 'a1', 'a3', 'em']
+    print(results[0].shape)
     if len(lat) == 1:
         lat = np.array([lat for _ in range(len(dates))])
         lon = np.array([lon for _ in range(len(dates))])
@@ -448,6 +449,12 @@ def save_results(lat, lon, dates, results, args):
         
         results_df.to_csv(f, index=False, mode='w+')
 
+
+def smooth(y, n):
+    y_smoothed = np.convolve(y, boxcar(n), mode='valid')
+    return y_smoothed
+
+
 def main():
     args = parse_args() 
 
@@ -455,11 +462,10 @@ def main():
     t_0 = time.time()
     
     lat, lon, pres, temp, date = extract_data_from_file(args)
-    
-    temp = temp[:200]
-    pres = pres[:200]
-    date = date[:200]
-
+    date = date[:500]
+    pres = pres[:500]
+    temp = temp[:500]
+     
     # pres = pres[1:-1]
     # temp = smooth(temp, 3)
     # date = date[1:-1]
