@@ -121,8 +121,6 @@ if __name__ == '__main__':
     print('Cada 60 elementos (5 min) de masked temp, hay 15 medidas o más?:', 
           (masked_temp[np.argmax(np.in1d(date_SBE56, date_low_37))::60].count(axis=1) >= 15).all())
 
-    
-
     # preassure array
     masked_depth = np.ma.masked_all_like(masked_temp)
     masked_depth[:, 0:6] = depth_SBE56[None, :6]

@@ -140,7 +140,7 @@ def fit_function(z, df, loc):
     return a1 + pos * (b3 * (z - D1) + a2 *(np.exp(zaux) - 1.0))
 
 
-def plot_fit_variable(df, variable, lims = [None, None], interval=None):
+def plot_fit_variable(df, variable, lims = [None, None], interval=None, plot=True):
     '''Plot given fit variable (e.g D1, a1, ...) for time between lims and 
     with given interval.
     '''
@@ -155,6 +155,9 @@ def plot_fit_variable(df, variable, lims = [None, None], interval=None):
     var = df[variable][lims[0]:lims[1]:interval]
     dates = df['Dates'][lims[0]:lims[1]:interval]
 
+    locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
+    formatter = mdates.ConciseDateFormatter(locator)
+
     fig, ax = plt.subplots()
     ax.scatter(dates, var, s=8)
     ax.set_xlabel('Date')
@@ -162,8 +165,18 @@ def plot_fit_variable(df, variable, lims = [None, None], interval=None):
         ax.set_ylabel(dic[variable])
     else:
         ax.set_ylabel(variable)
-    fig.tight_layout()
-    plt.show()
+
+    if variable == 'D1':
+        ax.set_ylim((max(var) + 4, min(var) - 4))
+
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(formatter)
+
+    if plot:
+        fig.tight_layout()
+        plt.show()
+    else:
+        return fig, ax
 
 
 def plot_profile_fit(df, temp, depth, loc):
@@ -196,7 +209,7 @@ def fitness(df, temp, depth, loc):
     if isinstance(loc, datetime):
         loc = date_to_iloc(df['Dates'], loc)
 
-    temp_loc = temp[:, loc]
+    temp_loc = temp[loc]
     fitness = np.sqrt(np.sum((temp_loc - fit_function(depth, df, loc))**2) / len(temp_loc))
     return fitness
     

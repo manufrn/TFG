@@ -14,6 +14,7 @@ from scipy.io import loadmat
 from scipy.optimize import OptimizeResult
 from scipy.signal.windows import boxcar
 from scipy.ndimage import uniform_filter1d, convolve1d
+from scipy.interpolate import interp1d
 
 
 def parse_args():
@@ -26,19 +27,19 @@ def parse_args():
                         help='File containing results of SHDR fit \
                         for a reference time series')
     parser.add_argument('-c', '--continous_fit', action='store_true')
+    parser.add_argument('-i', '--interpolate', action='store_true')
 
 
     # Genetics
-    parser.add_argument('-CC', '--cross_probability', type=float, default=0.5)
-    parser.add_argument('--mutation_factor', type=float, default=0.5)
-    parser.add_argument('--num_generations', type=int, default=1600)
+    parser.add_argument('-CC', '--cross_probability', type=float, default=0.61)
+    parser.add_argument('--mutation_factor', type=float, default=0.71)
+    parser.add_argument('--num_generations', type=int, default=1200)
     parser.add_argument('--num_individuals', type=int, default=60)
 
     # Fit
-    parser.add_argument('--max_b2_c2', type=float, default=0.5)
+    parser.add_argument('--max_b2_c2', type=float, default=0.2)
     parser.add_argument('--exp_limit', type=float, default=100)
     parser.add_argument('--bias_parametres', type=float, nargs= '+', default=None)
-    parser.add_argument('-k', '--k', type=float, default=0.0)
 
     # Physical
     parser.add_argument('--min_depth', type=float, default=100)
@@ -179,12 +180,14 @@ def b3_lims_from_reference(date, args):
     b3_mean = np.mean(df_reference['b3'])
     b3_std = np.std(df_reference['b3'])
 
-    # b3_min = b3_mean - b3_std * 0.5
-    # b3_max = b3_mean + b3_std * 0.5
-    b3_min = 0.0
-    b3_max = 0.0
+    b3_min = b3_mean - b3_std * 0.5
+    b3_max = b3_mean + b3_std * 0.5
+    
+    # b3_min = 0.0
+    # b3_max = 0.0
     
     b3_lims = [[b3_min, b3_max] for _ in range(len(date))]
+    print(b3_lims)
     return b3_lims
 
 
@@ -219,13 +222,9 @@ def random_init_population(lims, args):
     
 
 @njit
-def RMS_fitness(individuals, z, y, k, exp_limit):
+def RMS_fitness(individuals, z, y, exp_limit):
     '''Estimate the fitting for a group of individuals via mean squared error'''
-    if k == 0.0: 
-        weight = np.ones((individuals.shape[0], len(z)))
-    else:
-        weight = np.broadcast_to(np.expand_dims(np.exp(-k * (z - min(z))), axis=0), (individuals.shape[0], len(z)))
-    fitness = np.sqrt(np.sum(weight*(y - fit_function(individuals, z, exp_limit))**2, axis=1) / len(y))
+    fitness = np.sqrt(np.sum((y - fit_function(individuals, z, exp_limit))**2, axis=1) / len(y))
     return fitness
     
 
@@ -252,7 +251,7 @@ def modified_fitness(individuals, z, y, exp_limit, MLD, a, c,):
 
 
 @njit
-def diferential_evolution(individuals, z, y, lims, k, exp_limit, num_individuals, 
+def diferential_evolution(individuals, z, y, lims, exp_limit, num_individuals, 
                           num_generations, mutation_factor, cross_probability, tol,
                           penalty_args):
     n = num_individuals
@@ -265,7 +264,7 @@ def diferential_evolution(individuals, z, y, lims, k, exp_limit, num_individuals
 
     else:
         # parameters = (individuals, z, y, exp_limit, penalty_args[0], penalty_args[1], penalty_args[2])
-        present_fitns = RMS_fitness(individuals, z, y, k, exp_limit)
+        present_fitns = RMS_fitness(individuals, z, y, exp_limit)
     # present_fitns = fitness_func(*parameters)
 
     best_fit_loc = present_fitns.argmin()
@@ -294,7 +293,7 @@ def diferential_evolution(individuals, z, y, lims, k, exp_limit, num_individuals
         new_gen = np.where(new_gen > lims_max_bcst, lims_max_bcst, new_gen)
 
         if penalty_args is None:
-            new_fitns = RMS_fitness(new_gen, z, y, k, exp_limit)
+            new_fitns = RMS_fitness(new_gen, z, y, exp_limit)
 
         else:
             new_fitns = modified_fitness(new_gen, z, y, exp_limit, penalty_args[0], penalty_args[1], penalty_args[2])
@@ -310,16 +309,35 @@ def diferential_evolution(individuals, z, y, lims, k, exp_limit, num_individuals
         best_fit = individuals[best_fit_loc]
         best_fitness = present_fitns[best_fit_loc]
         
-        # if present_fitns.mean() * tol / present_fitns.std() > 1:
-        #     break
-
-        if best_fitness < tol:
+        if present_fitns.mean() * tol / present_fitns.std() > 1:
             break
+
+        # if best_fitness < tol:
+        #     break
     
     # result = OptimizeResult(x = best_fit, fun = present_fitns[best_fit_loc])
     # result = best_fit, present_fitns[best_fit_loc]
     return best_fit, present_fitns[best_fit_loc]
     
+def interpolate(z, y, z_values):
+    
+    if isinstance(z, np.ma.core.MaskedArray):
+        z = np.asarray(z[z.mask==False])
+        y = np.asarray(y[y.mask==False])
+
+    if len(z) != len(np.unique(z)):
+        idx = np.argmin((z[1:] - z[:-1])) + 1
+        z = np.delete(z, idx)
+        y = np.delete(y, idx)
+         
+
+    interp = interp1d(z, y, 'cubic')
+    idx = np.searchsorted(z, z_values)
+    z = np.insert(z, idx, z_values)
+    y = np.insert(y, idx, interp(z_values))
+    return z, y
+
+
 def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None): 
     '''Parse and fit data from a single profile'''
 
@@ -358,7 +376,7 @@ def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None):
     lims = (lims_min, lims_max)
 
     first_gen = random_init_population(lims, args)
-    result_1, fitnss_1 = diferential_evolution(first_gen, z, y, lims, args.k, args.exp_limit, 
+    result_1, fitnss_1 = diferential_evolution(first_gen, z, y, lims, args.exp_limit, 
                                      args.num_individuals, args.num_generations + add, args.mutation_factor, 
                                      args.cross_probability, args.tol, None)  
 
@@ -384,7 +402,7 @@ def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None):
     first_gen = random_init_population(lims_delta, args)   # new first generation
 
     if args.bias_parametres == None:
-        result_delta, fitnss_delta = diferential_evolution(first_gen, z, y, lims, args.k, args.exp_limit, 
+        result_delta, fitnss_delta = diferential_evolution(first_gen, z, y, lims, args.exp_limit, 
                                      args.num_individuals, args.num_generations, args.mutation_factor, 
                                      args.cross_probability, args.tol, None)  
     else:
@@ -453,52 +471,72 @@ def main():
 
     
     t_0 = time.time()
-    
+        
+    print('loading data')
     lat, lon, pres, temp, date = extract_data_from_file(args)
     
-    temp = temp[:200]
-    pres = pres[:200]
-    date = date[:200]
+    if args.interpolate:
+        print('generating pool arguments')
+        # z_values = np.array([13, 18, 25.5, 36, 39, 46, 56.3, 59.6, 68, 73, 82, 89])
+        # z_vaues = [13, 18, 38, 58, 68, 73, 87]
+        # z_values = np.array([13, 18, 25.5, 36, 39, 46, 56.3, 59.6, 68, 73, 82, 89, 102, 117, 139.5, 163.5])
 
-    # pres = pres[1:-1]
-    # temp = smooth(temp, 3)
-    # date = date[1:-1]
-    # kern = np.hanning(7)
-    # kern /= kern.sum()
-    # temp = np.asarray(np.delete(temp, [6, -1], axis=1))
-    # pres = np.asarray(np.delete(pres, [6, -1], axis=1))
-    # temp = uniform_filter1d(temp, 3, 0)
-    # temp = convolve1d(temp, kern, 0)
+        z_values = [13, 18, 38, 48, 58, 68, 73, 84, 90, 102, 114, 120, 131, 136, 141, 146, 156, 161, 166, 171]
+        pool_arguments = [[pres[i], temp[i], z_values] for i in range(len(date))]
+        
+        # check for reference_fit and construct argument list for pool
+        # that contains the reference (parametres of fit) that each fit should 
+        # have depending on their date
+        print('generating interpolated temperature')
+        with mp.Pool(processes=mp.cpu_count()) as pool:
+            interpolated_x_y = pool.starmap(interpolate, tqdm(pool_arguments,
+                                                total=len(pool_arguments)), chunksize=1)
 
-    print('Begining DE fit...')
-    if args.debuging != None:
-        # from analysis_functions import *
-        ### code to perform debuging
         if args.continous_fit and args.reference_fit != None:
-            slice = np.s_[10855:10858]
-            pres = pres[slice]
-            temp = temp[slice]
-            date = date[slice]
             b3_lims = b3_lims_from_reference(date, args)
-            C = np.array([0.502, 0.527, 0.545, 0.593, 0.634, 0.678, 0.703, 0.728])
-            F = C.copy()
+            results_fit = [fit_profile(interpolated_x_y[0][0],interpolated_x_y[0][1], args, b3_reference_lims=b3_lims[0])]
+            print('Begining DE fit...')
+            for k in tqdm(range(1, len(date))):
+                results_fit.append(fit_profile(interpolated_x_y[k][0], interpolated_x_y[k][1], args, results_fit[k - 1], b3_lims[k]))  
 
-            args.mutation_factor = F[0]
-            args.cross_probability = C[0]
-            results_fit = [fit_profile(pres[0], temp[0], args, b3_reference_lims=b3_lims[0])]
-            for c in C[1:]:
-                args.cross_probability = c
-                for f in F[1:]:
-                    args.mutation_factor = f
-                    results_fit = [fit_profile(pres[0], temp[0], args, b3_reference_lims=b3_lims[0])]
-                    for k in range(1, len(date)):
-                        results_fit.append([fit_profile(pres[k], temp[k], args, results_fit[k - 1], b3_lims[k]),
-                                       args.k, f, c])
-                
-            columns = ['D1', 'b2', 'c2', 'b3', 'a2', 'a1', 'a3', 'em', 'k', 'f', 'c']
-            results_df = pd.DataFrame(results, columns=columns)
-            date = np.tile(date, len(c)**2)
-            results_df.insert(0, 'date', date)
+        elif args.reference_fit != None:
+            b3_lims = b3_lims_from_reference(date, args)
+            print(b3_lims[0])
+            results_fit = []
+            for k in tqdm(range(len(date))):
+                results_fit.append(fit_profile(pres[k], temp[k], args, b3_reference_lims=b3_lims[k]))
+
+
+    
+
+    # if args.debuging != None:
+    #     # from analysis_functions import *
+    #     ### code to perform debuging
+    #     if args.continous_fit and args.reference_fit != None:
+    #         slice = np.s_[10855:10858]
+    #         pres = pres[slice]
+    #         temp = temp[slice]
+    #         date = date[slice]
+    #         b3_lims = b3_lims_from_reference(date, args)
+    #         C = np.array([0.502, 0.527, 0.545, 0.593, 0.634, 0.678, 0.703, 0.728])
+    #         F = C.copy()
+    #
+    #         args.mutation_factor = F[0]
+    #         args.cross_probability = C[0]
+    #         results_fit = [fit_profile(pres[0], temp[0], args, b3_reference_lims=b3_lims[0])]
+    #         for c in C[1:]:
+    #             args.cross_probability = c
+    #             for f in F[1:]:
+    #                 args.mutation_factor = f
+    #                 results_fit = [fit_profile(pres[0], temp[0], args, b3_reference_lims=b3_lims[0])]
+    #                 for k in range(1, len(date)):
+    #                     results_fit.append([fit_profile(pres[k], temp[k], args, results_fit[k - 1], b3_lims[k]),
+    #                                    args.k, f, c])
+    #             
+    #         columns = ['D1', 'b2', 'c2', 'b3', 'a2', 'a1', 'a3', 'em', 'k', 'f', 'c']
+    #         results_df = pd.DataFrame(results, columns=columns)
+    #         date = np.tile(date, len(c)**2)
+    #         results_df.insert(0, 'date', date)
             
             
                 
@@ -508,7 +546,7 @@ def main():
         results_fit = [fit_profile(pres[0], temp[0], args, b3_reference_lims=b3_lims[0])]
         for k in tqdm(range(1, len(date))):
             results_fit.append(fit_profile(pres[k], temp[k], args, results_fit[k - 1], b3_lims[k]))
-    
+
     elif args.reference_fit != None:
         b3_lims = b3_lims_from_reference(date, args)
         results_fit = []
