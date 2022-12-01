@@ -23,11 +23,12 @@ def parse_args():
     parser.add_argument('datafile', help='File containing data to be fitted')
 
     # Assist fit 
-    parser.add_argument('--reference_fit', type=str, default=None, 
+    parser.add_argument('--b3_ref', type=str, default=None, 
                         help='File containing results of SHDR fit \
                         for a reference time series')
     parser.add_argument('-c', '--continous_fit', action='store_true')
     parser.add_argument('-i', '--interpolate', action='store_true')
+    parser.add_argument('-d', '--delta_coding', action='store_true')
 
 
     # Genetics
@@ -39,7 +40,6 @@ def parse_args():
     # Fit
     parser.add_argument('--max_b2_c2', type=float, default=0.2)
     parser.add_argument('--exp_limit', type=float, default=100)
-    parser.add_argument('--bias_parametres', type=float, nargs= '+', default=None)
 
     # Physical
     parser.add_argument('--min_depth', type=float, default=100)
@@ -47,7 +47,7 @@ def parse_args():
     parser.add_argument('--min_obs', type=int, default=10)
     
     # Misc
-    parser.add_argument('--output_dir', type=str, default='/home/manu/TFG_repo/data/SHDR_fit')
+    parser.add_argument('--output_dir', type=str, default='./data/SHDR_fit')
     parser.add_argument('--output_file', type=str, default=None)
     parser.add_argument('--tol', type=float, default=0.00025)
     parser.add_argument('--seed', type=int, default=111)
@@ -168,6 +168,7 @@ def limits_from_previous(z, y, previous_result, args):
 
     return lims_min, lims_max
 
+
 def b3_lims_from_reference(date, args):
     '''Given dataframe of reference fit, calculate mean and std
     of b3 values in that dataframe and generate a list the same
@@ -180,14 +181,10 @@ def b3_lims_from_reference(date, args):
     b3_mean = np.mean(df_reference['b3'])
     b3_std = np.std(df_reference['b3'])
 
-    b3_min = b3_mean - b3_std * 0.5
-    b3_max = b3_mean + b3_std * 0.5
-    
-    # b3_min = 0.0
-    # b3_max = 0.0
+    b3_min = b3_mean 
+    b3_max = b3_mean
     
     b3_lims = [[b3_min, b3_max] for _ in range(len(date))]
-    print(b3_lims)
     return b3_lims
 
 
@@ -229,43 +226,13 @@ def RMS_fitness(individuals, z, y, exp_limit):
     
 
 @njit
-def penalty_f(z, MLD, a, c):
-
-     pos = np.where(z < MLD, 1.0, 0.0)
-     # return a * np.exp(- (z - MLD / 4)**2 / 2 / c**2)
-     return a*pos
-
-@njit
-def modified_fitness(individuals, z, y, exp_limit, MLD, a, c,):
-    ''' Modfied version to implement higher error weights to points in
-    the MLD '''
-    
-    alpha = RMS_fitness(individuals, z, y, exp_limit) * np.sqrt(len(y)) \
-            / np.sum(((y - fit_function(individuals, z, exp_limit))**2 
-            * penalty_f(z, MLD, a, c)), axis=1)
-
-    fitness = np.sqrt(np.sum(((y - fit_function(individuals, z, exp_limit))**2)
-                             * (1 + np.expand_dims(alpha, axis=1) * penalty_f(z, MLD, a, c)), axis=1) / len(y))
-    
-    return fitness
-
-
-@njit
 def diferential_evolution(individuals, z, y, lims, exp_limit, num_individuals, 
-                          num_generations, mutation_factor, cross_probability, tol,
-                          penalty_args):
+                          num_generations, mutation_factor, cross_probability, tol):
     n = num_individuals
     lims_min, lims_max = lims
     n_var = lims_max.size
 
-    if penalty_args is not None:
-        # parameters = (individuals, z, y, exp_limit)
-        present_fitns = modified_fitness(individuals, z, y, exp_limit, penalty_args[0], penalty_args[1], penalty_args[2])
-
-    else:
-        # parameters = (individuals, z, y, exp_limit, penalty_args[0], penalty_args[1], penalty_args[2])
-        present_fitns = RMS_fitness(individuals, z, y, exp_limit)
-    # present_fitns = fitness_func(*parameters)
+    present_fitns = RMS_fitness(individuals, z, y, exp_limit)
 
     best_fit_loc = present_fitns.argmin()
     best_fit = individuals[best_fit_loc]
@@ -292,11 +259,8 @@ def diferential_evolution(individuals, z, y, lims, exp_limit, num_individuals,
         new_gen = np.where(new_gen < lims_min_bcst, lims_min_bcst, new_gen)
         new_gen = np.where(new_gen > lims_max_bcst, lims_max_bcst, new_gen)
 
-        if penalty_args is None:
-            new_fitns = RMS_fitness(new_gen, z, y, exp_limit)
+        new_fitns = RMS_fitness(new_gen, z, y, exp_limit)
 
-        else:
-            new_fitns = modified_fitness(new_gen, z, y, exp_limit, penalty_args[0], penalty_args[1], penalty_args[2])
 
         new_fitns_bcst = np.broadcast_to(np.expand_dims(new_fitns, axis=1), individuals.shape)
         present_fitns_bcst = np.broadcast_to(np.expand_dims(present_fitns, axis=1), individuals.shape)
@@ -312,13 +276,9 @@ def diferential_evolution(individuals, z, y, lims, exp_limit, num_individuals,
         if present_fitns.mean() * tol / present_fitns.std() > 1:
             break
 
-        # if best_fitness < tol:
-        #     break
-    
-    # result = OptimizeResult(x = best_fit, fun = present_fitns[best_fit_loc])
-    # result = best_fit, present_fitns[best_fit_loc]
     return best_fit, present_fitns[best_fit_loc]
     
+
 def interpolate(z, y, z_values):
     
     if isinstance(z, np.ma.core.MaskedArray):
@@ -378,47 +338,43 @@ def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None):
     first_gen = random_init_population(lims, args)
     result_1, fitnss_1 = diferential_evolution(first_gen, z, y, lims, args.exp_limit, 
                                      args.num_individuals, args.num_generations + add, args.mutation_factor, 
-                                     args.cross_probability, args.tol, None)  
+                                     args.cross_probability, args.tol)  
 
     #### DELTA CODING ####
     # set new limits for fit in function of previous fit result
     # and have them meet the physical limits
-    
+    if args.delta_coding:
+        lims_min_delta, lims_max_delta = 0.85 * result_1, 1.15 * result_1
+        for i in np.where(np.sign(result_1) < 0)[0]:
+            lims_min_delta[i], lims_max_delta[i] = lims_max_delta[i], lims_min_delta[i]
 
-    lims_min_delta, lims_max_delta = 0.85 * result_1, 1.15 * result_1
-    for i in np.where(np.sign(result_1) < 0)[0]:
-        lims_min_delta[i], lims_max_delta[i] = lims_max_delta[i], lims_min_delta[i]
 
+        lims_min_delta = np.where(lims_min_delta >= lims_min, lims_min_delta,  lims_min)
+        lims_max_delta = np.where(lims_max_delta <= lims_max, lims_max_delta, lims_max)
 
-    lims_min_delta = np.where(lims_min_delta >= lims_min, lims_min_delta,  lims_min)
-    lims_max_delta = np.where(lims_max_delta <= lims_max, lims_max_delta, lims_max)
+        if args.continous_fit and b3_reference_lims != None:
+            lims_min[1], lims_min[2] = 0.0, 0.0
+            lims_max[1], lims_max[2] = args.max_b2_c2, args.max_b2_c2
 
-    # if args.continous_fit and b3_reference_lims != None:
-    #     lims_min[1], lims_min[2] = 0.0, 0.0
-    #     lims_max[1], lims_max[2] = args.max_b2_c2, args.max_b2_c2
+        lims_delta = (lims_min_delta, lims_max_delta)
 
-    lims_delta = (lims_min_delta, lims_max_delta)
+        first_gen = random_init_population(lims_delta, args)   # new first generation
 
-    first_gen = random_init_population(lims_delta, args)   # new first generation
-
-    if args.bias_parametres == None:
         result_delta, fitnss_delta = diferential_evolution(first_gen, z, y, lims, args.exp_limit, 
                                      args.num_individuals, args.num_generations, args.mutation_factor, 
-                                     args.cross_probability, args.tol, None)  
+                                     args.cross_probability, args.tol)  
+
+        if fitnss_1 < fitnss_delta:
+            result = result_1
+            fitnss = fitnss_1
+
+        else:
+            result = result_delta
+            fitnss = fitnss_delta
+
     else:
-        MLD = result_1[0]
-        penalty_args = np.array([MLD, args.bias_parametres[0], MLD/6])
-        result_delta, fitnss_delta = diferential_evolution(first_gen, z, y, lims, args.exp_limit, 
-                                     args.num_individuals, args.num_generations, args.mutation_factor, 
-                                     args.cross_probability, args.tol, penalty_args)
-
-    if fitnss_1 < fitnss_delta:
         result = result_1
         fitnss = fitnss_1
-    
-    else:
-        result = result_delta
-        fitnss = fitnss_delta
 
     D1, b2, c2, b3, a2, a1 = result
     em = fitnss
@@ -469,7 +425,6 @@ def save_results(lat, lon, dates, results, args):
 def main():
     args = parse_args() 
 
-    
     t_0 = time.time()
         
     print('loading data')
@@ -478,10 +433,10 @@ def main():
     if args.interpolate:
         print('generating pool arguments')
         # z_values = np.array([13, 18, 25.5, 36, 39, 46, 56.3, 59.6, 68, 73, 82, 89])
-        # z_vaues = [13, 18, 38, 58, 68, 73, 87]
-        # z_values = np.array([13, 18, 25.5, 36, 39, 46, 56.3, 59.6, 68, 73, 82, 89, 102, 117, 139.5, 163.5])
+        # z_values = [13, 18, 38, 58, 68, 73, 87]
+        z_values = np.array([13, 18, 25.5, 36, 39, 46, 56.3, 59.6, 68, 73, 82, 89, 102, 117, 139.5, 163.5])
 
-        z_values = [13, 18, 38, 48, 58, 68, 73, 84, 90, 102, 114, 120, 131, 136, 141, 146, 156, 161, 166, 171]
+        # z_values = [13, 18, 38, 48, 58, 68, 73, 84, 90, 102, 114, 120, 131, 136, 141, 146, 156, 161, 166, 171]
         pool_arguments = [[pres[i], temp[i], z_values] for i in range(len(date))]
         
         # check for reference_fit and construct argument list for pool

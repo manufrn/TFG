@@ -1,5 +1,3 @@
-import h5py
-import netCDF4
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -8,136 +6,7 @@ from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
 import matplotlib.dates as mdates
 from datetime import datetime, timedelta
-from config import data_dir, reports_dir
-
-def load_time_series(filename, latlon= False, convert_date=True):
-    '''Load time series saved as filename in data_dir/time_series
-    '''
-
-    file_path = data_dir / 'time_series' / filename
-
-    if filename.endswith('.h5'):
-        with h5py.File(file_path, 'r') as f:
-            temp = np.array(f['temperature'])
-            depth = np.array(f['pressure'])
-            date = np.array(f['date'])
-            lat = np.array(f['lat'])
-            lon = np.array(f['lon'])
-
-    if filename.endswith('.nc'):
-        with netCDF4.Dataset(file_path, 'r') as ds:
-            temp = ds.variables['temp'][:]
-            try:
-                depth = ds.variables['pres'][:]
-            except:
-                depth = ds.variables['depth'][:]
-            date = ds.variables['date'][:]
-            lat = ds.variables['lat'][:]
-            lon = ds.variables['lon'][:]
-    else:
-        raise Exception('Only .h5 and .nc time series supported')
-
-    if convert_date:
-        date = np.array([datetime.utcfromtimestamp(i) for i in date])
-    
-    if latlon:
-        return temp, depth, date, lat, lon
-
-    else:
-        return temp, depth, date
-
-def if_masked_to_array(array):
-    '''CHech if given array is maked and return a standard ndarray version
-    of it whithout the false values of the mask'''
-
-    if isinstance(array, np.ma.core.MaskedArray):
-        return np.asarray(array[array.mask == False])
-    else:
-        return array
-    
-def load_SHDR_fit(filename):
-    '''Load  saved SHDR fit as filename in data_dir/SHDR_fit.
-    Returns data frame containing fit of time series.
-    '''
-
-    file_path = data_dir / 'SHDR_fit' / filename
-    df_fit = pd.read_csv(file_path)
-    try:
-        df_fit['Dates'] = df_fit['Dates'].apply(lambda x: datetime.utcfromtimestamp(x))
-
-    except:
-        df_fit['Dates'] = df_fit['date'].apply(lambda x: datetime.utcfromtimestamp(x))
-    return df_fit
-     
-
-
-# def date_to_iloc(dates, date):
-#     ''' Use fit dataframe to convert a given date to the closest iloc. 
-#     '''
-#     
-#     try:
-#         iloc = np.where(dates == date)[0][0]
-#
-#     except:
-#         possible_dates = [date + timedelta(seconds=dt) for dt in (-2, -1, 1, 2)]
-#         iloc = np.in1d(dates, possible_dates).argmax()
-    # return iloc
-
-def date_to_iloc(dates, date):
-    ''' Use fit dataframe to convert a given date to the closest iloc. 
-    '''
-    
-    try:
-        iloc = np.where(dates == date)[0][0]
-    except:
-        sign = +1
-        value = 1
-        while True:
-            dt = sign*value
-            possible_date = date + timedelta(seconds=dt) 
-            if date + timedelta(seconds=dt) in dates:
-                iloc =  np.where(dates==possible_date)[0][0]
-            
-            if sign == -1:
-                value += 1
-                
-            sign *= -1
-
-    return iloc
-
-def timedelta_to_interval(timedelta, dt=5):
-        '''Return interval in rows of df fit for a given timedelta
-        '''
-
-        interval = np.int(np.round(timedelta.total_seconds() / dt))
-        return interval
-
-
-def mean_and_std(df_fit, variable):
-    variable = df_fit[variable]
-    return variable.mean(), variable.std()
-
-
-def fit_function(z, df, loc):
-    '''Return value of idealized fit function for datapoint at loc. loc can be
-    integer pointing to position of datapoint or datetime object.
-    '''
-    
-    # check if inputed loc is datetime object and convert it to iloc
-    if isinstance(loc, datetime):
-        loc = date_to_iloc(df['Dates'], loc)
-
-    
-    fit = df.iloc[loc]
-    
-    D1, b2, c2 = fit['D1'], fit['b2'], fit['c2']
-    b3, a2, a1 = fit['b3'], fit['a2'], fit['a1']
-
-    # print('D1: {:.2f}, a1: {:.2f}, b3: {:.2E}, b2:{:.2E}, c2: {:.2E}'.format(D1, a1, b3, b2, c2))
-
-    pos = np.where(z >= D1, 1.0, 0.0)  # check if z is above or bellow MLD
-    zaux = - (z - D1) * (b2 + (z - D1) * c2)
-    return a1 + pos * (b3 * (z - D1) + a2 *(np.exp(zaux) - 1.0))
+from analysis_routines import *
 
 
 def plot_fit_variable(df, variable, lims = [None, None], interval=None, plot=True):
@@ -149,7 +18,7 @@ def plot_fit_variable(df, variable, lims = [None, None], interval=None, plot=Tru
         interval = timedelta_to_interval(df['Dates'], interval)
 
     if isinstance(lims[0], datetime):
-        lims = [date_to_iloc(df['Dates'], lim) for lim in lims]
+        lims = [date_to_idx(df['Dates'], lim) for lim in lims]
 
     dic = {'D1': 'MLD (m)', 'a1': 'SST (ºC)'}
     var = df[variable][lims[0]:lims[1]:interval]
@@ -184,7 +53,7 @@ def plot_profile_fit(df, temp, depth, loc):
     '''
 
     if isinstance(loc, datetime):
-        loc = date_to_iloc(df['Dates'], loc)
+        loc = date_to_idx(df['Dates'], loc)
 
     zz = np.linspace(1, depth[-1] + 5, 300)
 
@@ -204,25 +73,13 @@ def plot_profile_fit(df, temp, depth, loc):
     plt.show()
 
 
-def fitness(df, temp, depth, loc):
-    ''' Get RMS for profile in loc at height z 
-    ''' 
-
-    if isinstance(loc, datetime):
-        loc = date_to_iloc(df['Dates'], loc)
-
-    temp_loc = temp[loc]
-    fitness = np.sqrt(np.sum((temp_loc - fit_function(depth, df, loc))**2) / len(temp_loc))
-    return fitness
-    
-
 def plot_RMS_fit(df, temp, depth, loc):
     ''' Plot experimental profile and fit with diference between fit and profile,
     and square of that difference.
     '''
 
     if isinstance(loc, datetime):
-        loc = date_to_iloc(df['Dates'], loc)
+        loc = date_to_idx(df['Dates'], loc)
     
     delta = temp[:, loc] - fit_function(depth, df, loc)
     zz = np.linspace(0, depth[-1] + 5, 300)
@@ -251,30 +108,12 @@ def plot_RMS_fit(df, temp, depth, loc):
     plt.show()
 
 
-def penalty_f(z, a, c, MLD):
-    return a * np.exp(- (z - MLD)**2 / 2 / c**2)
-
-
-def modified_fitness(individuals, z, y, args, MLD, a, c,):
-    ''' Modfied version to implement higher error weights to points in
-    the MLD '''
-    
-    alpha = fitness(individuals, z, y, args) * np.sqrt(len(y)) \
-            / np.sum(((y - fit_function(individuals, z, args))**2 
-            * penalty_f(z, a, c, MLD)), axis=1)
-
-    fitness = np.sqrt(np.sum(((y - fit_function(individuals, z, args))**2)
-              * (1 + alpha)) / len(y))
-
-    return fitness
-
-
 def plot_multiple_profiles(df, temp, depth, locs):
     
     n = len(locs)
     for loc in locs:
         if isinstance(loc, datetime):
-            loc = date_to_iloc(df, loc)
+            loc = date_to_idx(df, loc)
 
     if n % 2 != 0:
         raise Exception('This function can only plot an even number \
@@ -308,11 +147,12 @@ def plot_multiple_profiles(df, temp, depth, locs):
 
 def animate_profile_evolution(df, tems, depth, filename, optional_mld=None,
                               start_loc=0, final_loc=None, number_plots=300):
+
     if isinstance(start_loc, datetime):
-        start_loc = date_to_iloc(df['Dates'], start_loc)
+        start_loc = date_to_idx(df['Dates'], start_loc)
 
     if isinstance(final_loc, datetime):
-        final_loc = date_to_iloc(df['Dates'], final_loc)
+        final_loc = date_to_idx(df['Dates'], final_loc)
 
     if final_loc == None:
         final_loc = len(df) - 1
@@ -358,10 +198,10 @@ def plot_thermistor_temperature(temp, depth, date, i, wide='True', lims=[None, N
 
 
     if isinstance(lims[0], datetime):
-        lims[0] = date_to_iloc(date, lims[0])
+        lims[0] = date_to_idx(date, lims[0])
 
     if isinstance(lims[1], datetime):
-        lims[1] = date_to_iloc(date, lims[1])
+        lims[1] = date_to_idx(date, lims[1])
 
     if isinstance(interval, timedelta):
         inteval = timedelta_to_interval()
@@ -387,12 +227,12 @@ def plot_thermistor_temperature(temp, depth, date, i, wide='True', lims=[None, N
     ax.set_xlabel('Date')
     fig.tight_layout()
     plt.show()
-    
+
 
 def plot_column_temperature(temp, depth, date, lims = [None, None], interval=None):
 
     if isinstance(lims[0], datetime):
-        lims = [date_to_iloc(date, lim) for lim in lims]
+        lims = [date_to_idx(date, lim) for lim in lims]
 
     if isinstance(interval, timedelta):
         inteval = timedelta_to_interval()
@@ -416,4 +256,3 @@ def plot_column_temperature(temp, depth, date, lims = [None, None], interval=Non
     fig.colorbar(im)
     fig.tight_layout()
     plt.show()
-
