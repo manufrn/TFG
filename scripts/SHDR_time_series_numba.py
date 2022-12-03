@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 import time
 import argparse
 import h5py
@@ -437,7 +438,7 @@ def save_results(lat, lon, dates, results, args):
 def print_iteration_status(k, N, t_0):
     t_delta = round(time.time() - t_0)
     t_delta = timedelta(seconds=t_delta)
-    print('{} profiles fitted out of {} ({:.2f} %) | Running time {}'.format(k, N, k/N, t_delta))
+    print('{} profiles fitted out of {} ({:.2f} %) | Running time {}'.format(k, N, 100*k/N, t_delta))
 
 
 def main():
@@ -465,14 +466,14 @@ def main():
         # b3 ref and continous
         if args.continous_fit:
             for k in trange_date:
-                if args.v and int(k % N/200) == 0:
+                if args.v and k % int(N/200) == 0:
                     print_iteration_status(k, N, t_0)
                 results_fit.append(fit_profile(pres[k], temp[k], args, results_fit[k - 1], b3_lims))
 
         # only b3_ref
         else: 
             for k in trange_date:
-                if args.v and int(k % N/200)  == 0:
+                if args.v and k % int(N/200)  == 0:
                     print_iteration_status(k, N, t_0)
                 results_fit.append(fit_profile(pres[k], temp[k], args, b3_reference_lims=b3_lims))
 
@@ -482,18 +483,19 @@ def main():
         # only continous
         if args.continous_fit:
             for k in trange_date:
-                if args.v and int(k % N/200) == 0:
+                if args.v and k % int(N/200) == 0:
                     print_iteration_status(k, N, t_0)
                 results_fit.append(fit_profile(pres[k], temp[k], args, results_fit[k - 1]))
 
         # neither continous nor b3_ref
         else:
             for k in trange_date:
-                if args.v and int(k % N/200) == 0:
+                if args.v and k % int(N/200) == 0:
                     print_iteration_status(k, N, t_0)
                 results_fit.append(fit_profile(pres[k], temp[k], args))
 
     save_results(lat, lon, date, results_fit, args)
+    print('Program exited succesfully')
 
 
 if __name__ == '__main__':
