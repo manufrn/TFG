@@ -48,7 +48,13 @@ def load_SHDR_fit(filename):
     '''
 
     file_path = data_dir / 'SHDR_fit' / filename
-    df_fit = pd.read_csv(file_path)
+    skiprows = 0
+    with open(file_path, 'r+') as f:
+        first_line = f.readline()
+        if first_line.startswith('SHDR'):
+            skiprows = 14
+
+    df_fit = pd.read_csv(file_path, skiprows=skiprows)
 
     try:
         df_fit['Dates'] = df_fit['Dates'].apply(lambda x: datetime.utcfromtimestamp(x))
@@ -57,6 +63,17 @@ def load_SHDR_fit(filename):
         df_fit['Dates'] = df_fit['date'].apply(lambda x: datetime.utcfromtimestamp(x))
 
     return df_fit
+
+def get_fit_metadata(filename):
+    file_path = data_dir / 'SHDR_fit' / filename
+    with open(file_path, 'r+') as f:
+        first_line = f.readline()
+        if first_line.startswith('SHDR'):
+            metadata_list = [first_line]
+            for _ in range(13):
+                metadata_list.append(next(f))
+            metadata_string = ''.join(metadata_list)
+            return metadata_string
 
 
 def fit_function(z, df, loc):
@@ -79,6 +96,21 @@ def fit_function(z, df, loc):
     pos = np.where(z >= D1, 1.0, 0.0)  # check if z is above or bellow MLD
     zaux = - (z - D1) * (b2 + (z - D1) * c2)
     return a1 + pos * (b3 * (z - D1) + a2 *(np.exp(zaux) - 1.0))
+
+@np.vectorize
+def datenum_to_epoch(datenum):
+    """Convert Matlab datenum into posix time.
+    """
+
+    days = datenum % 1
+    datetime_format = (datetime.fromordinal(int(datenum)) \
+           + timedelta(days=days) \
+           - timedelta(days=366))
+    date64 = np.datetime64(datetime_format)
+    posix_time = ((date64 - np.datetime64('1970-01-01T00:00:00')) 
+                  / (np.timedelta64(1, 's')))
+    return round(posix_time)
+
 
 
 def if_masked_to_array(array):
@@ -127,3 +159,25 @@ def timedelta_to_interval(timedelta, dt=5):
 def mean_and_std(df_fit, variable):
     variable = df_fit[variable]
     return variable.mean(), variable.std()
+
+
+def distance(df_fit, variable, n, value):
+    '''Given variable of df_fit, return the locs where the diference between
+    slices [n:] - [:-n] in that variable are greater than value.
+    '''
+    array = df_fit[variable].to_numpy()
+    locs = np.where(abs(array[n:] - array[:-n]) > value)[0]
+    ratio = len(locs)/len(df_fit)
+    return locs, ratio
+                    
+
+def physical_RMS(df_fit, temp, pres, loc):
+    y = if_masked_to_array(temp[loc])
+    z = if_masked_to_array(pres[loc])
+    fitnes = np.sqrt(np.sum((y - fit_function(z, df_fit, loc))**2) / len(y))
+    return fitnes
+
+def n_worst_profiles(df_fit, n):
+    em = df_fit['em'].to_numpy()
+    indices = np.argpartition(em, -n)[-n:]
+    return indices
