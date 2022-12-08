@@ -2,41 +2,48 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from matplotlib.colors import BoundaryNorm
+from matplotlib.colors import BoundaryNorm, LogNorm
 from matplotlib.ticker import MaxNLocator
 import matplotlib.dates as mdates
 from datetime import datetime, timedelta
 from analysis_routines import *
+from IPython.display import Video
+from config import data_dir, reports_dir
 
 
-def plot_fit_variable(df, variable, lims = [None, None], interval=None, plot=True):
+def plot_fit_variable(df, variable, lims = [None, None], interval=None, plot=True, wide=True):
     '''Plot given fit variable (e.g D1, a1, ...) for time between lims and 
     with given interval.
     '''
     
     if isinstance(interval, timedelta):
-        interval = timedelta_to_interval(df['Dates'], interval)
+        interval = timedelta_to_interval(interval)
 
     if isinstance(lims[0], datetime):
-        lims = [date_to_idx(df['Dates'], lim) for lim in lims]
+        lims[0] = date_to_idx(df['date'], lims[0])
 
-    dic = {'D1': 'MLD (m)', 'a1': 'SST (ºC)'}
+    if isinstance(lims[1], datetime):
+        lims[1] = date_to_idx(df['date'], lims[1])
+
     var = df[variable][lims[0]:lims[1]:interval]
-    dates = df['Dates'][lims[0]:lims[1]:interval]
+    dates = df['date'][lims[0]:lims[1]:interval]
 
     locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
     formatter = mdates.ConciseDateFormatter(locator)
 
-    fig, ax = plt.subplots()
+    if wide:
+        fig, ax = plt.subplots(figsize=(7, 3.75))
+    else: 
+        fig, ax = plt.subplots()
+
     ax.scatter(dates, var, s=8)
-    ax.set_xlabel('Date')
-    if variable in dic:
-        ax.set_ylabel(dic[variable])
-    else:
-        ax.set_ylabel(variable)
 
     if variable == 'D1':
         ax.set_ylim((max(var) + 4, min(var) - 4))
+        ax.set_ylabel('MLD (db)')
+
+    else:
+        ax.set_ylabel(variable)
 
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
@@ -53,7 +60,7 @@ def plot_profile_fit(df, temp, depth, loc):
     '''
 
     if isinstance(loc, datetime):
-        loc = date_to_idx(df['Dates'], loc)
+        loc = date_to_idx(df['date'], loc)
 
     zz = np.linspace(1, depth[-1] + 5, 300)
 
@@ -68,7 +75,7 @@ def plot_profile_fit(df, temp, depth, loc):
     ax.plot(fit_function(zz, df, loc), zz, lw=1)
     ax.set_xlabel('Temperature (ºC)')
     ax.set_ylabel('Depth (mb)')
-    ax.set_title(df['Dates'].iloc[loc])
+    ax.set_title(df['date'].iloc[loc])
     fig.tight_layout()
     plt.show()
 
@@ -79,7 +86,7 @@ def plot_RMS_fit(df, temp, depth, loc):
     '''
 
     if isinstance(loc, datetime):
-        loc = date_to_idx(df['Dates'], loc)
+        loc = date_to_idx(df['date'], loc)
     
     delta = temp[:, loc] - fit_function(depth, df, loc)
     zz = np.linspace(0, depth[-1] + 5, 300)
@@ -103,7 +110,7 @@ def plot_RMS_fit(df, temp, depth, loc):
     ax3.set_xlabel('$\Delta^2$')
     ax3.set_ylim(depth[-1] + 10, 0)
     ax3.tick_params(left=False)
-    fig.suptitle(df['Dates'].iloc[loc])
+    fig.suptitle(df['date'].iloc[loc])
     fig.tight_layout()
     plt.show()
 
@@ -139,7 +146,7 @@ def plot_multiple_profiles(df, temp, depth, locs):
                                          'pad': 5}, transform=ax.transAxes, ha='center')
         ax.set_xlabel('Temperature (ºC)')
         ax.set_ylabel('Depth (mb)')
-        ax.set_title(df['Dates'].iloc[loc])
+        ax.set_title(df['date'].iloc[loc])
 
     fig.tight_layout()
     plt.show()
@@ -149,10 +156,10 @@ def animate_profile_evolution(df, tems, depth, filename, optional_mld=None,
                               start_loc=0, final_loc=None, number_plots=300):
 
     if isinstance(start_loc, datetime):
-        start_loc = date_to_idx(df['Dates'], start_loc)
+        start_loc = date_to_idx(df['date'], start_loc)
 
     if isinstance(final_loc, datetime):
-        final_loc = date_to_idx(df['Dates'], final_loc)
+        final_loc = date_to_idx(df['date'], final_loc)
 
     if final_loc == None:
         final_loc = len(df) - 1
@@ -181,7 +188,7 @@ def animate_profile_evolution(df, tems, depth, filename, optional_mld=None,
         mld.set_data((9.5, 18), (df.iloc[i, 3], df.iloc[i, 3]))
         if isinstance(optional_mld, np.ndarray):
             opt_mld.set_data((9.5, 18), (optional_mld[i], optional_mld[i]))
-        title.set_text('{}'.format(df['Dates'][i]))
+        title.set_text('{}'.format(df['date'][i]))
 
     ani = FuncAnimation(fig, animate, frames=numbers, interval=70)
     ani.save(reports_dir / 'movies' / filename)
@@ -196,6 +203,9 @@ def plot_thermistor_temperature(temp, depth, date, i, wide='True', lims=[None, N
         temp = if_masked_to_array(temp[:, i])
         depth = if_masked_to_array(depth[:, i])
 
+    else:
+        temp = temp[:, i]
+
 
     if isinstance(lims[0], datetime):
         lims[0] = date_to_idx(date, lims[0])
@@ -204,7 +214,7 @@ def plot_thermistor_temperature(temp, depth, date, i, wide='True', lims=[None, N
         lims[1] = date_to_idx(date, lims[1])
 
     if isinstance(interval, timedelta):
-        inteval = timedelta_to_interval()
+        interval = timedelta_to_interval(interval)
 
 
     date = date[lims[0]:lims[1]:interval]
@@ -229,30 +239,73 @@ def plot_thermistor_temperature(temp, depth, date, i, wide='True', lims=[None, N
     plt.show()
 
 
-def plot_column_temperature(temp, depth, date, lims = [None, None], interval=None):
+def plot_column_temperature(temp, date, df_fit=None, interval=120, lims=[None, None], wide=True):
+
+    if temp.shape[1] == 16:
+        depth_bins = np.array([0, 4.5, 15.5, 25.5, 30.5, 38, 47, 52, 58, 70.5, 80, 102, 117, 138.5, 163.5, 196, 215])
+
+    else:
+        raise ValueError('Temperature array format not recognized')
+
 
     if isinstance(lims[0], datetime):
         lims = [date_to_idx(date, lim) for lim in lims]
 
+
     if isinstance(interval, timedelta):
-        inteval = timedelta_to_interval()
+        interval = timedelta_to_interval(interval)
+        date = date[lims[0]:lims[1]:interval]
+        temp = temp[lims[0]:lims[1]:interval]
+        temp = temp[:-1]
 
-    date = date[lims[0]:lims[1]:interval]
-    temp = temp[:, lims[0]:lims[1]:interval]
+        if df_fit is not None:
+            mld_array = df_fit['D1'].to_numpy()
+            mld_array = mld_array[lims[0]:lims[1]:interval]
 
+
+    else:
+        date = date[lims[0]:lims[1]:interval]
+        temp = temp[lims[0]:lims[1]:interval]
+        xx = np.linspace(0, len(date) - 1, 500, dtype='int')
+        date = date[xx]
+        temp = temp[xx[:-1]]
+
+        if df_fit is not None:
+            mld_array = df_fit['D1'].to_numpy()
+            mld_array = mld_array[lims[0]:lims[1]:interval][xx]
+
+
+    # temp = temp[:-1]
     locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
     formatter = mdates.ConciseDateFormatter(locator)
     cmap = plt.colormaps['viridis']
     levels = MaxNLocator(nbins=256).tick_values(temp.min(), temp.max())
     norm = BoundaryNorm(levels, ncolors=cmap.N, clip=True)
     
-    fig, ax = plt.subplots()
+    if wide:
+        fig, ax = plt.subplots(figsize=(8.6, 3.75))
+    else: 
+        fig, ax = plt.subplots()
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
-    ax.set_ylim(depth[-1] + 10, 0)
-    # for i in depth:
-    #     ax.axhline(i)
-    im = ax.pcolormesh(date, depth, temp, cmap=cmap, norm=norm)
-    fig.colorbar(im)
+    ax.set_ylim(depth_bins[-1], 0)
+    for i in depth_bins:
+        ax.axhline(i, ls=':', c='grey', lw=0.1)
+
+
+    x, y = np.meshgrid(date, depth_bins)
+
+    im = ax.pcolormesh(x.T, y.T, temp, cmap=cmap, norm=norm)
+    if df_fit is not None:
+        ax.plot(date, mld_array, c='black', lw=0.45, ls='--')
+    ax.set_title('Column temperature (ºC)')
+    cbar = fig.colorbar(im, extend='both')
+    # cbar.set_ticks([])
+    cbar.ax.tick_params(which='minor', axis='y', right=False)
     fig.tight_layout()
     plt.show()
+
+
+def display_video(filename):
+    video_path = reports_dir / 'movies' / filename
+    return Video(video_path, embed=True, width=500)

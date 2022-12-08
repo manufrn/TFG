@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument('-c', '--continous_fit', action='store_true')
     parser.add_argument('-i', '--interpolate', action='store_true')
     parser.add_argument('-d', '--delta_coding', action='store_true')
+    parser.add_argument('--resume_fit', type=str, default=None)
 
 
     # Genetics
@@ -141,33 +142,49 @@ def get_fit_limits(z, y, args):
     lims_min = lims[:, 0]
     lims_max = lims[:, 1]
 
-    
     return lims_min, lims_max
 
 
 def limits_from_previous(z, y, previous_result, args):
     lims_min, lims_max = get_fit_limits(z, y, args)
-
-    slice = np.s_[[0, 3, 4, 5]]
-    updated_lims_min = previous_result[slice]*0.8
-    updated_lims_max = previous_result[slice]*1.2
-
-    # if previous_result[1] >= 1e-4:
-    #     updated_lim_max[1] = previous_result[1]*
-    # updated_lims_max = previous_result[]
-
-    updated_lims_min = np.where(abs(updated_lims_min) > abs(lims_min[slice]), 
-                                updated_lims_min, lims_min[slice])
-    updated_lims_max = np.where(abs(updated_lims_max) < abs(lims_max[slice]), 
-                                updated_lims_max, lims_max[slice])
-
-    # lims_min[1] = previous_result[1] * 0.5
     
-    lims_min[slice] = updated_lims_min
-    lims_max[slice] = updated_lims_max
+    # a1
+    if previous_result[5] != 0:
+        a1_min = previous_result[5]*0.85
+        a1_max = previous_result[5]*1.15
+        lims_min[5] = a1_min if a1_min > lims_min[5] else lims_min[5]
+        lims_max[5] = a1_max if a1_max < lims_max[5] else lims_max[5]
 
-    # if previous_result[1] >=1e-5:
-    #     lims_max[1] = previous_result[1]*1.5
+    # D1
+    if previous_result[0] != 1:
+        D1_min = previous_result[0]*0.8
+        D1_max = previous_result[0]*1.2
+        lims_min[0] = D1_min if D1_min > lims_min[0] else lims_min[0]
+        lims_max[0] = D1_max if D1_max < lims_max[0] else lims_max[0]
+
+    if args.b3_ref is None and previous_result[3] != 0:
+        b3_max = previous_result[0]*0.8
+        b3_min = previous_result[0]*1.2
+        lims_min[3] = a1_min if a1_min > lims_min[3] else lims_min[3]
+        lims_max[3] = a1_max if a1_max < lims_max[3] else lims_max[3]
+
+    # if previous_result[4] !=0:
+    #     a2_min = previous_result[4]*0.8
+    #     a2_max = previous_result[4]*1.2
+    #     lims_min[4] = a2_min # no need to check it is between limits, it will be
+        # lims_max[4] = a2_max if a2_max < lims_max[4] else lims_max[4]
+
+    # updated_lims_min = previous_result[slice]*0.8
+    # updated_lims_max = previous_result[slice]*1.2
+    #
+    # updated_lims_min = np.where(abs(updated_lims_min) > abs(lims_min[slice]), 
+    #                             updated_lims_min, lims_min[slice])
+    # updated_lims_max = np.where(abs(updated_lims_max) < abs(lims_max[slice]), 
+    #                             updated_lims_max, lims_max[slice])
+    #
+    # 
+    # lims_min[slice] = updated_lims_min
+    # lims_max[slice] = updated_lims_max
 
     return lims_min, lims_max
 
@@ -384,7 +401,6 @@ def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None):
     em = fitnss
     a3 = a1 - a2 
     return np.array([D1, b2, c2, b3, a2, a1, a3, em])
-    
         
 
 def save_results(lat, lon, dates, results, args):
@@ -441,6 +457,25 @@ def print_iteration_status(k, N, t_0):
     print('{} profiles fitted out of {} ({:.2f} %) | Running time {}'.format(k, N, 100*k/N, t_delta))
 
 
+def load_fit_to_resume(args):
+    file_path = args.resume_fit
+
+    skiprows = 0
+    with open(file_path, 'r+') as f:
+        first_line = f.readline()
+        if first_line.startswith('SHDR'):
+            skiprows = 14
+
+    df_fit = pd.read_csv(file_path, skiprows=skiprows)
+    results = []
+    for index, row in df_fit.iterrows():
+        result = np.array([row.D1, row.b2, row.c2, row.b3, row.a2, row.a1, row.a3, row.em])
+        results.append(result)
+
+    last_date = df_fit.iloc[-1]['date']
+    return results, last_date
+
+
 def main():
     args = parse_args() 
 
@@ -450,18 +485,29 @@ def main():
 
     lat, lon, pres, temp, date = extract_data_from_file(args)
 
+    if args.resume_fit:
+        saved_results, last_date = load_fit_to_resume(args)
+        i_0 = np.where(date == last_date)[0][0] + 1
+
+    else:
+        i_0 = 1
+
     N = len(date)
 
     if args.v:
         print('Begining fit...')
-        trange_date = range(1, N)
+        trange_date = range(i_0, N)
         
     else:
-        trange_date = trange(1, N, desc='Fitting profiles')
+        trange_date = trange(i_0, N, desc='Fitting profiles')
 
     if args.b3_ref != None:
         b3_lims = b3_lims_from_reference(date, args)
-        results_fit = [fit_profile(pres[0], temp[0], args, b3_reference_lims=b3_lims)]
+
+        if args.resume_fit is not None:
+            results_fit = saved_results
+        else:
+            results_fit = [fit_profile(pres[0], temp[0], args, b3_reference_lims=b3_lims)]
 
         # b3 ref and continous
         if args.continous_fit:
@@ -478,7 +524,10 @@ def main():
                 results_fit.append(fit_profile(pres[k], temp[k], args, b3_reference_lims=b3_lims))
 
     else:
-        results_fit = [fit_profile(pres[0], temp[0], args)]
+        if args.resume_fit is not None:
+            results_fit = saved_results
+        else:
+            results_fit = [fit_profile(pres[0], temp[0], args)]
         
         # only continous
         if args.continous_fit:

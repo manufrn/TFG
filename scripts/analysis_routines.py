@@ -3,7 +3,10 @@ import netCDF4
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
+from pandarallel import pandarallel
 from config import data_dir, reports_dir
+
+pandarallel.initialize(verbose=0)
 
 def load_time_series(filename, latlon=False, convert_date=True):
     '''Load time series saved as filename in data_dir/time_series
@@ -42,7 +45,7 @@ def load_time_series(filename, latlon=False, convert_date=True):
         return temp, depth, date
 
 
-def load_SHDR_fit(filename):
+def load_SHDR_fit(filename, convert_date=True):
     '''Load  saved SHDR fit as filename in data_dir/SHDR_fit.
     Returns data frame containing fit of time series.
     '''
@@ -56,11 +59,14 @@ def load_SHDR_fit(filename):
 
     df_fit = pd.read_csv(file_path, skiprows=skiprows)
 
-    try:
-        df_fit['Dates'] = df_fit['Dates'].apply(lambda x: datetime.utcfromtimestamp(x))
-
-    except:
-        df_fit['Dates'] = df_fit['date'].apply(lambda x: datetime.utcfromtimestamp(x))
+    if convert_date:
+        try:
+            df_fit['date'] = df_fit['Dates'].parallel_apply(lambda x: datetime.utcfromtimestamp(x))
+            # df_fit['Date'] = pd.to_datetime(df_fit['Dates'], unit='s', utc=True)
+            # df_fit.rename(columns=({'Dates': 'date'}), inplace=True)
+        except:
+            df_fit['date'] = df_fit['date'].parallel_apply(lambda x: datetime.utcfromtimestamp(x))
+            # df_fit['date'] = pd.to_datetime(df_fit['date'], unit='s', utc=True)
 
     return df_fit
 
@@ -83,7 +89,7 @@ def fit_function(z, df, loc):
     
     # check if inputed loc is datetime object and convert it to iloc
     if isinstance(loc, datetime):
-        loc = date_to_idx(df['Dates'], loc)
+        loc = date_to_idx(df['date'], loc)
 
     
     fit = df.iloc[loc]
@@ -148,11 +154,11 @@ def date_to_idx(dates, date):
 
     return idx
 
-def timedelta_to_interval(timedelta, dt=5):
+def timedelta_to_interval(tdelta, dt=5):
         '''Return interval in rows of df fit for a given timedelta
         '''
 
-        interval = np.int(np.round(timedelta.total_seconds() / dt))
+        interval = np.int(np.round(tdelta.total_seconds() / dt))
         return interval
 
 

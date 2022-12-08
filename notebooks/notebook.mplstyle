@@ -47,3 +47,6 @@ mathtext.fontset : dejavusans
 
 # Use LaTeX for math formatting
 text.usetex : False
+#mathtext.fontset: stix
+#font.family: STIXGeneral
+#axes.formatter.use_mathtext: True
