@@ -5,6 +5,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from pandarallel import pandarallel
 from config import data_dir, reports_dir
+from scipy.interpolate import interp1d
 
 pandarallel.initialize(verbose=0)
 
@@ -90,18 +91,17 @@ def fit_function(z, df, loc):
     # check if inputed loc is datetime object and convert it to iloc
     if isinstance(loc, datetime):
         loc = date_to_idx(df['date'], loc)
-
     
     fit = df.iloc[loc]
     
     D1, b2, c2 = fit['D1'], fit['b2'], fit['c2']
     b3, a2, a1 = fit['b3'], fit['a2'], fit['a1']
 
-    # print('D1: {:.2f}, a1: {:.2f}, b3: {:.2E}, b2:{:.2E}, c2: {:.2E}'.format(D1, a1, b3, b2, c2))
 
     pos = np.where(z >= D1, 1.0, 0.0)  # check if z is above or bellow MLD
     zaux = - (z - D1) * (b2 + (z - D1) * c2)
-    return a1 + pos * (b3 * (z - D1) + a2 *(np.exp(zaux) - 1.0))
+    f = a1 + pos * (b3 * (z - D1) + a2 *(np.exp(zaux) - 1.0))
+    return f
 
 @np.vectorize
 def datenum_to_epoch(datenum):
@@ -187,3 +187,34 @@ def n_worst_profiles(df_fit, n):
     em = df_fit['em'].to_numpy()
     indices = np.argpartition(em, -n)[-n:]
     return indices
+
+def interpolate(z, y, z_values):
+    
+    if isinstance(z, np.ma.core.MaskedArray):
+        z = np.asarray(z[z.mask==False])
+        y = np.asarray(y[y.mask==False])
+
+    if len(z) != len(np.unique(z)):
+        idx = np.argmin((z[1:] - z[:-1])) + 1
+        z = np.delete(z, idx)
+        y = np.delete(y, idx)
+
+    interp = interp1d(z, y, 'cubic')
+    idx = np.searchsorted(z, z_values)
+    y = interp(z_values)
+    z = z_values
+    return z, y
+
+def find_MLD_threshold(temp, pres, loc, threshold):
+    pres_loc = pres[loc]
+    temp_loc = temp[loc]
+    
+    zz = np.linspace(1, np.max(pres_loc), 200)
+    pres_loc, temp_loc = interpolate(pres_loc, temp_loc, zz)
+    dif = temp_loc[0] - temp_loc
+    a = np.searchsorted(dif, threshold)
+    if a == len(pres_loc):
+        MLD = pres_loc[-1]
+    else:
+        MLD = pres_loc[a]
+    return MLD

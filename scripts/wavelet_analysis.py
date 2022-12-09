@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pycwt
 import sys
 from datetime import datetime, timedelta
-from analysis_functions import *
+from analysis_routines import *
 from config import data_dir
 import matplotlib.gridspec as gs
 
@@ -138,13 +138,20 @@ def new_complete_plot(temp, time, power, period, coi, sig95, levels, glbl_power,
 
 if __name__ == '__main__':
      
-    temp, pres, time, _, _ = load_time_series('AGL_1_SB56.h5', convert_date=False)
-    time = time[:100000]
-    temp = temp[7, :100000]
-    depth = pres[7]
+    
+    temp, pres, time = load_time_series('processed/AGL_20181116_chain.nc', convert_date=False)
+    date = np.array([datetime.utcfromtimestamp(i) for i in time])
+
+    # i_0 = date_to_idx(date, datetime(2018, 11, 22, 20))
+    # i_f = date_to_idx(date, datetime(2018, 11, 23, 8))
+    i_0 = date_to_idx(date, datetime(2018, 11, 17, 12))
+    i_f = date_to_idx(date, datetime(2018, 11, 19))
+    time = time[i_0:i_f:6]
+    temp = temp[i_0:i_f:6, 7]
+    depth = pres[0, 7]
     # url = 'http://paos.colorado.edu/research/wavelets/wave_idl/nino3sst.txt'
     # temp = np.genfromtxt(url, skip_header=19)
-    # title = 'NINO3 Sea Surface Temperature'
+    # title = 'NINO3º Sea Surface Temperature'
     # label = 'NINO3 SST'
     # units = 'degC'
     # t0 = 1871.0

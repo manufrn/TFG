@@ -55,28 +55,37 @@ def plot_fit_variable(df, variable, lims = [None, None], interval=None, plot=Tru
         return fig, ax
 
 
-def plot_profile_fit(df, temp, depth, loc):
+def plot_profile_fit(df, temp, depth, loc, save=False):
     '''Plot measured vertical profile and fit for measure at loc
     '''
 
     if isinstance(loc, datetime):
         loc = date_to_idx(df['date'], loc)
 
-    zz = np.linspace(1, depth[-1] + 5, 300)
 
     temp_loc = if_masked_to_array(temp[loc])
     pres_loc = if_masked_to_array(depth[loc])
 
+    zz = np.linspace(1, pres_loc[-1] + 5, 300)
+
+        
     fig, ax = plt.subplots(figsize=(4, 4.6875))
-    ax.scatter(temp_loc, pres_loc, marker='o', fc='None', ec='tab:red', s=22)
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    ax.scatter(temp_loc, pres_loc, marker='o', fc='None', ec=colors[1], s=24)
     ax.axhline(df.iloc[loc, 3], c='grey', ls='--') # plot MLD
     ax.set_ylim(pres_loc[-1] + 10, 0)
-    ax.set_xlim(9.5, 18)
-    ax.plot(fit_function(zz, df, loc), zz, lw=1)
+    if depth.shape[1] == 17:
+        ax.set_xlim(11, 25)
+    else:
+        ax.set_xlim(9.5, 18)
+
+    ax.plot(fit_function(zz, df, loc), zz, lw=1, c=colors[0])
     ax.set_xlabel('Temperature (ºC)')
-    ax.set_ylabel('Depth (mb)')
+    ax.set_ylabel('Depth (db)')
     ax.set_title(df['date'].iloc[loc])
     fig.tight_layout()
+    if save:
+        fig.savefig(str(save))
     plt.show()
 
 
@@ -171,7 +180,7 @@ def animate_profile_evolution(df, tems, depth, filename, optional_mld=None,
     ax.set_xlabel('Temperature (ºC)')
     ax.set_ylabel('Depth (db)')
     ax.set_ylim(np.max(depth) + 3, 0)
-    ax.set_xlim(9.5, 18)
+    ax.set_xlim(11, 25)
     fig.tight_layout()
 
     points, = ax.plot([], [], 'o', mfc='None', mec='tab:red')
@@ -239,7 +248,7 @@ def plot_thermistor_temperature(temp, depth, date, i, wide='True', lims=[None, N
     plt.show()
 
 
-def plot_column_temperature(temp, date, df_fit=None, interval=120, lims=[None, None], wide=True):
+def plot_column_temperature(temp, date, df_fit=None, interval=120, lims=[None, None], wide=True, save=False):
 
     if temp.shape[1] == 16:
         depth_bins = np.array([0, 4.5, 15.5, 25.5, 30.5, 38, 47, 52, 58, 70.5, 80, 102, 117, 138.5, 163.5, 196, 215])
@@ -303,6 +312,8 @@ def plot_column_temperature(temp, date, df_fit=None, interval=120, lims=[None, N
     # cbar.set_ticks([])
     cbar.ax.tick_params(which='minor', axis='y', right=False)
     fig.tight_layout()
+    if save is not False:
+        fig.savefig(reports_dir / str(save))
     plt.show()
 
 
