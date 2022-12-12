@@ -1,6 +1,7 @@
 import h5py
 import netCDF4
 import numpy as np
+import xarray as xr
 import pandas as pd
 from datetime import datetime, timedelta
 from pandarallel import pandarallel
@@ -70,6 +71,14 @@ def load_SHDR_fit(filename, convert_date=True):
             # df_fit['date'] = pd.to_datetime(df_fit['date'], unit='s', utc=True)
 
     return df_fit
+
+def load_buoy_series(filename):
+    ds = xr.open_dataset(data_dir / 'buoy_time_series' / filename)
+    df = ds.to_dataframe()
+    df['date'] = df['date'].apply(lambda x: datetime.utcfromtimestamp(x))
+    df.set_index('date', inplace=True)
+    return df
+
 
 def get_fit_metadata(filename):
     file_path = data_dir / 'SHDR_fit' / filename
@@ -188,7 +197,7 @@ def n_worst_profiles(df_fit, n):
     indices = np.argpartition(em, -n)[-n:]
     return indices
 
-def interpolate(z, y, z_values):
+def interpolate(z, y, z_values, insert=False):
     
     if isinstance(z, np.ma.core.MaskedArray):
         z = np.asarray(z[z.mask==False])
@@ -200,19 +209,29 @@ def interpolate(z, y, z_values):
         y = np.delete(y, idx)
 
     interp = interp1d(z, y, 'cubic')
-    idx = np.searchsorted(z, z_values)
-    y = interp(z_values)
-    z = z_values
+
+    y_values = interp(z_values)
+    if insert:
+        idx = np.searchsorted(z, z_values)
+        z = np.insert(z, idx, z_values)
+        y = np.insert(y, idx, y_values)
+
+    else:
+        z = z_values
+        y = y_values
     return z, y
 
-def find_MLD_threshold(temp, pres, loc, threshold):
-    pres_loc = pres[loc]
-    temp_loc = temp[loc]
+def find_MLD_threshold(temp, pres, threshold=0.2, interpolation=True):
+    temp_loc = if_masked_to_array(temp)
+    pres_loc = if_masked_to_array(pres)
     
-    zz = np.linspace(1, np.max(pres_loc), 200)
-    pres_loc, temp_loc = interpolate(pres_loc, temp_loc, zz)
+    if interpolation:
+        zz = np.linspace(np.min(pres_loc), np.max(pres_loc), 200)
+        pres_loc, temp_loc = interpolate(pres_loc, temp_loc, zz)
+
     dif = temp_loc[0] - temp_loc
     a = np.searchsorted(dif, threshold)
+
     if a == len(pres_loc):
         MLD = pres_loc[-1]
     else:

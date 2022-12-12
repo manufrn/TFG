@@ -203,34 +203,10 @@ def animate_profile_evolution(df, tems, depth, filename, optional_mld=None,
     ani.save(reports_dir / 'movies' / filename)
 
 
-def plot_thermistor_temperature(temp, depth, date, i, wide='True', lims=[None, None], interval=None):
+
+def plot_thermistor_temperature(temp, depth, date, idxs, wide='True', lims=[None, None], interval=None):
     '''Plot a single thermistor temperature series 
     '''
-
-    if isinstance(temp, np.ma.core.MaskedArray):
-        date = date[temp[:, i].mask==False]
-        temp = if_masked_to_array(temp[:, i])
-        depth = if_masked_to_array(depth[:, i])
-
-    else:
-        temp = temp[:, i]
-
-
-    if isinstance(lims[0], datetime):
-        lims[0] = date_to_idx(date, lims[0])
-
-    if isinstance(lims[1], datetime):
-        lims[1] = date_to_idx(date, lims[1])
-
-    if isinstance(interval, timedelta):
-        interval = timedelta_to_interval(interval)
-
-
-    date = date[lims[0]:lims[1]:interval]
-    temp = temp[lims[0]:lims[1]:interval]
-    depth = depth[lims[0]:lims[1]:interval]
-
-    
     locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
     formatter = mdates.ConciseDateFormatter(locator)
 
@@ -241,21 +217,57 @@ def plot_thermistor_temperature(temp, depth, date, i, wide='True', lims=[None, N
 
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
-    ax.plot(date, temp)
-    ax.set_title(f'Temperature at depth {depth[0]} db (ºC)')
-    ax.set_xlabel('Date')
+    if isinstance(idxs, list):
+        for i in idxs:
+            if isinstance(temp, np.ma.core.MaskedArray):
+                date_i = date[temp[:, i].mask==False]
+                temp_i = if_masked_to_array(temp[:, i])
+
+            if isinstance(lims[0], datetime):
+                lim_0 = date_to_idx(date_i, lims[0])
+
+            if isinstance(lims[1], datetime):
+                lim_1 = date_to_idx(date_i, lims[1])
+
+            if isinstance(interval, timedelta):
+                interval_i = timedelta_to_interval(interval)
+
+            else:
+                interval_i = interval
+
+            date_i = date_i[lim_0:lim_1:interval_i]
+            temp_i = temp_i[lim_0:lim_1:interval_i]
+
+            ax.plot(date_i, temp_i, label=f'{depth[0, i]} m')
+            ax.legend()
+            ax.set_ylabel('Temperature ºC')
+
+    else:
+        i = idxs
+        if isinstance(temp, np.ma.core.MaskedArray):
+            date_i = date[temp[:, i].mask==False]
+            temp_i = if_masked_to_array(temp[:, i])
+
+            if isinstance(lims[0], datetime):
+                lims[0] = date_to_idx(date_i, lims[0])
+
+            if isinstance(lims[1], datetime):
+                lims[1] = date_to_idx(date_i, lims[1])
+
+            if isinstance(interval, timedelta):
+                interval = timedelta_to_interval(interval)
+
+            date_i = date_i[lims[0]:lims[1]:interval]
+            temp_i = temp_i[lims[0]:lims[1]:interval]
+
+            ax.plot(date_i, temp_i)
+            ax.set_title(f'Temperature at depth {depth[0, i]} db (ºC)')
     fig.tight_layout()
     plt.show()
 
 
-def plot_column_temperature(temp, date, df_fit=None, interval=120, lims=[None, None], wide=True, save=False):
-
-    if temp.shape[1] == 16:
-        depth_bins = np.array([0, 4.5, 15.5, 25.5, 30.5, 38, 47, 52, 58, 70.5, 80, 102, 117, 138.5, 163.5, 196, 215])
-
-    else:
-        raise ValueError('Temperature array format not recognized')
-
+def plot_column_temperature(temp, date, pres, df_fit=None, interval=120, lims=[None, None], 
+                            smooth=True, ylims=None, wide=True, save=False):
 
     if isinstance(lims[0], datetime):
         lims = [date_to_idx(date, lim) for lim in lims]
@@ -265,7 +277,6 @@ def plot_column_temperature(temp, date, df_fit=None, interval=120, lims=[None, N
         interval = timedelta_to_interval(interval)
         date = date[lims[0]:lims[1]:interval]
         temp = temp[lims[0]:lims[1]:interval]
-        temp = temp[:-1]
 
         if df_fit is not None:
             mld_array = df_fit['D1'].to_numpy()
@@ -277,13 +288,18 @@ def plot_column_temperature(temp, date, df_fit=None, interval=120, lims=[None, N
         temp = temp[lims[0]:lims[1]:interval]
         xx = np.linspace(0, len(date) - 1, 500, dtype='int')
         date = date[xx]
-        temp = temp[xx[:-1]]
+        temp = temp[xx]
 
         if df_fit is not None:
             mld_array = df_fit['D1'].to_numpy()
             mld_array = mld_array[lims[0]:lims[1]:interval][xx]
 
+    if lims[0] is not None:
+        depths = pres[lims[0]] 
 
+    else:
+        depths = pres[0]
+    
     # temp = temp[:-1]
     locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
     formatter = mdates.ConciseDateFormatter(locator)
@@ -297,16 +313,23 @@ def plot_column_temperature(temp, date, df_fit=None, interval=120, lims=[None, N
         fig, ax = plt.subplots()
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
-    ax.set_ylim(depth_bins[-1], 0)
-    for i in depth_bins:
-        ax.axhline(i, ls=':', c='grey', lw=0.1)
+    if ylims is not None:
+        ax.set_ylim(ylims[0], ylims[1])
+    else:
+        ax.set_ylim(depths[-1], 0)
+    for i in depths:
+        ax.axhline(i, ls=':', c='grey', lw=0.3)
 
+    x, y = np.meshgrid(date, depths)
+    if smooth:
+        im = ax.pcolormesh(x.T, y.T, temp, cmap=cmap, norm=norm, shading='gouraud')
 
-    x, y = np.meshgrid(date, depth_bins)
+    else:
+        im = ax.pcolormesh(x.T, y.T, temp, cmap=cmap, norm=norm, shading='nearest')
 
-    im = ax.pcolormesh(x.T, y.T, temp, cmap=cmap, norm=norm)
     if df_fit is not None:
         ax.plot(date, mld_array, c='black', lw=0.45, ls='--')
+
     ax.set_title('Column temperature (ºC)')
     cbar = fig.colorbar(im, extend='both')
     # cbar.set_ticks([])
