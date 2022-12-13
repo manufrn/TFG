@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument('--b3_ref', type=str, default=None, 
                         help='File containing results of SHDR fit \
                         for a reference time series')
+
     parser.add_argument('-c', '--continous_fit', action='store_true')
     parser.add_argument('-i', '--interpolate', action='store_true')
     parser.add_argument('-d', '--delta_coding', action='store_true')
@@ -34,24 +35,37 @@ def parse_args():
     # Genetics
     parser.add_argument('-CC', '--cross_probability', type=float, default=0.61)
     parser.add_argument('--mutation_factor', type=float, default=0.71)
-    parser.add_argument('--num_generations', type=int, default=1200)
-    parser.add_argument('--num_individuals', type=int, default=60)
+    parser.add_argument('--num_generations', type=int, default=1200, 
+                        help='Number of generations')
+    parser.add_argument('--num_individuals', type=int, default=60, 
+                        help='Number of individuals per generation')
 
     # Numerical
-    parser.add_argument('--max_b2_c2', type=float, default=0.2)
-    parser.add_argument('--exp_limit', type=float, default=100)
+    parser.add_argument('--max_b2_c2', type=float, default=0.2, 
+                        help='''Maximun value for gaussian and exponential b2
+                        and c2 parametres''')
+
+    parser.add_argument('--exp_limit', type=float, default=100,
+                        help="""Maximum decay combining gaussian and
+                        exponential decays""")
 
     # Physical
-    parser.add_argument('--min_depth', type=float, default=100)
-    parser.add_argument('--max_depth', type=float, default=450)
-    parser.add_argument('--min_obs', type=int, default=10)
-    
+    parser.add_argument('--min_depth', type=float, default=100, 
+                        help="""Minimum max depth of profile""")
+    parser.add_argument('--max_depth', type=float, default=450, 
+                        help="""Maximum depth taken acount into the fit""")
+    parser.add_argument('--min_obs', type=int, default=10, 
+                        help="""Minimum datapoints""")
+
     # Misc
-    parser.add_argument('--output_dir', type=str, default='./data/SHDR_fit')
-    parser.add_argument('--output_file', type=str, default=None)
-    parser.add_argument('--tol', type=float, default=0.00015)
-    parser.add_argument('--seed', type=int, default=111)
-    parser.add_argument('-v' , action='store_true')
+    parser.add_argument('--output_dir', type=str, default='./data/SHDR_fit', 
+                        help="""Path to save results""")
+    parser.add_argument('--output_file', type=str, default=None,
+                        help="""Results filename""")
+    parser.add_argument('--tol', type=float, default=0.00015, 
+                        help='Tolerance for genetic evolution')
+    parser.add_argument('--seed', type=int, default=111, help='Random seed')
+    parser.add_argument('-v' , action='store_true', help='Ya veremos')
     
     return parser.parse_args()
 

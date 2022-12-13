@@ -149,13 +149,13 @@ if __name__ == '__main__':
 
     # i_0 = date_to_idx(date, datetime(2018, 11, 22, 20))
     # i_f = date_to_idx(date, datetime(2018, 11, 23, 8))
-    i_0 = date_to_idx(date, datetime(2018, 11, 16, 12))
-    i_f = date_to_idx(date, datetime(2018, 11, 24, 12))
-    temp = temp[i_0:i_f, 8]
+    i_0 = date_to_idx(date, datetime(2018, 12, 6, 0))
+    i_f = date_to_idx(date, datetime(2018, 12, 6, 12))
+    temp = temp[i_0:i_f:6, 9]
 
 
-    time = time[i_0:i_f]
-    depth = pres[0, 8]
+    time = time[i_0:i_f:6]
+    depth = pres[0, 9]
     # url = 'http://paos.colorado.edu/research/wavelets/wave_idl/nino3sst.txt'
     # temp = np.genfromtxt(url, skip_header=19)
     # title = 'NINO3º Sea Surface Temperature'
