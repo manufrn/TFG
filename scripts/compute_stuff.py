@@ -47,11 +47,16 @@ def quality_index(MLD, y, z, interpolation=False):
     if idx_1_5_MLD == len(z) or idx_1_5_MLD==idx_MLD or idx_MLD==0:
         return np.nan
 
+    if idx_1_5_MLD - idx_MLD < 3:
+        return np.nan
+
     z_1_5 = z[:idx_1_5_MLD]
     y_1_5 = y[:idx_1_5_MLD]
     
     return 1 - np.std(y_ML)/np.std(y_1_5)
 
+
+print('Generating Pool arguments...')
 pool_arguments = [[df_s['D1'][i], temp[i], pres[i], True] for i in range(len(date))]
 
 with mp.Pool(processes=mp.cpu_count() - 4) as pool:

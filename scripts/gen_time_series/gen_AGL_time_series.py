@@ -64,13 +64,13 @@ def get_SBE56(path, n_min = 0, n_max = None):
 
 if __name__ == '__main__':
 
-    output_path = data_dir / 'time_series' / 'processed' /'AGL_20181116_chain.nc'
+    output_path = data_dir / 'time_series' / 'processed' /'AGL_20181116_chain_xrcompatible.nc'
     latitude, longitude = 43.789, 3.782 # latitude and longitude of AGL buoy
     n_min = 0
     n_max = 2471041 # to crop data before thermistors are taken out of the water
 
-    path_SBE56 = data_dir / 'raw' / 'thermistor_chain' / 'AGL_1' / 'SBE56'
-    path_SBE37 = data_dir / 'raw' / 'thermistor_chain' / 'AGL_1' / 'SBE37'
+    path_SBE56 = data_dir / 'raw' / 'thermistor_chain' / 'AGL_20181116' / 'SBE56'
+    path_SBE37 = data_dir / 'raw' / 'thermistor_chain' / 'AGL_201811120181116' / 'SBE37'
     fn_up_SBE37 = 'SBE37567420190409.mat' # upper SBE37 (around 50 m)
     fn_low_SBE37 = 'SBE37346520190409.mat' # lower SBE37 (around 225 m)
 
@@ -150,17 +150,17 @@ if __name__ == '__main__':
         ds.title = 'AGL_1 thermistor chain series'
 
         # dimensions
-        ds.createDimension('time', dim_time)
-        ds.createDimension('depth', dim_depth)
-        ds.createDimension('lat', 1)
-        ds.createDimension('lon', 1)
+        ds.createDimension('time_dim', dim_time)
+        ds.createDimension('depth_dim', dim_depth)
+        ds.createDimension('lat_dim', 1)
+        ds.createDimension('lon_dim', 1)
         
         # variables
-        lat = ds.createVariable('lat', 'f4', ('lat',))
-        lon = ds.createVariable('lon', 'f4', ('lon',))
-        temp = ds.createVariable('temp', 'f8', ('time', 'depth',))
-        date = ds.createVariable('date', 'i4', ('time', ))
-        depth = ds.createVariable('depth', 'i4', ('time', 'depth',))
+        lat = ds.createVariable('lat', 'f4', ('lat_dim',))
+        lon = ds.createVariable('lon', 'f4', ('lon_dim',))
+        temp = ds.createVariable('temp', 'f8', ('time_dim', 'depth_dim',))
+        date = ds.createVariable('date', 'i4', ('time_dim', ))
+        depth = ds.createVariable('depth', 'i4', ('time_dim', 'depth_dim',))
         
         # asign data
         lat[:] = latitude

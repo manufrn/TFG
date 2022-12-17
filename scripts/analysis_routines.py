@@ -147,19 +147,20 @@ def date_to_idx(dates, date):
         idx = np.where(dates == date)[0][0]
 
     except:
-        sign = +1
-        value = 1
-        while True:
-            dt = sign*value
-            possible_date = date + timedelta(seconds=dt) 
-
-            if date + timedelta(seconds=dt) in dates:
-                idx =  np.where(dates==possible_date)[0][0]
-                break
-            
-            if sign == -1:
-                value += 1
-            sign *= -1
+        idx = np.searchsorted(dates, date)
+        # sign = +1
+        # value = 1
+        # while True:
+        #     dt = sign*value
+        #     possible_date = date + timedelta(seconds=dt) 
+        #
+        #     if date + timedelta(seconds=dt) in dates:
+        #         idx =  np.where(dates==possible_date)[0][0]
+        #         break
+        #     
+        #     if sign == -1:
+        #         value += 1
+        #     sign *= -1
 
     return idx
 

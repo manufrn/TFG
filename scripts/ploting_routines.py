@@ -77,7 +77,7 @@ def plot_profile_fit(df, temp, depth, loc, save=False):
     if depth.shape[1] == 17:
         ax.set_xlim(11, 25)
     else:
-        ax.set_xlim(9.5, 18)
+        ax.set_xlim(11, 16)
 
     ax.plot(fit_function(zz, df, loc), zz, lw=1, c=colors[0])
     ax.set_xlabel('Temperature (ºC)')
@@ -104,7 +104,7 @@ def plot_RMS_fit(df, temp, depth, loc):
     ax1.scatter(temp[:, loc], depth, marker='o', fc='None', ec='tab:red', s=22)
     ax1.axhline(df.iloc[loc, 3], c='grey', ls='--') # plot MLD
     ax1.set_ylim(depth[-1] + 10, 0)
-    ax1.set_xlim(9.5, 18)
+    ax1.set_xlim(11, 16)
     ax1.plot(fit_function(zz, df, loc), zz)
     ax1.set_xlabel('Temperature (ºC)')
     ax1.set_ylabel('Depth (mb)')
@@ -124,7 +124,7 @@ def plot_RMS_fit(df, temp, depth, loc):
     plt.show()
 
 
-def plot_multiple_profiles(df, temp, depth, locs):
+def plot_multiple_profiles(df, temp, depth, locs, em=None):
     
     n = len(locs)
     for loc in locs:
@@ -144,14 +144,15 @@ def plot_multiple_profiles(df, temp, depth, locs):
     for ax, loc in zip(axes, locs):
         temp_loc = if_masked_to_array(temp[loc])
         depth_loc = if_masked_to_array(depth[loc])
+        em_loc = em[loc] if isinstance(em, np.ndarray) else df['em'][loc]
         ax.scatter(temp_loc, depth_loc, marker='o', fc='None', ec='tab:red')
         ax.axhline(df.iloc[loc, 3], c='grey', ls='--')
         ax.set_ylim(max_ylim, 0)
-        ax.set_xlim(9.5, 18)
+        ax.set_xlim(11, 16)
 
         ax.plot(fit_function(zz, df, loc), zz)
 
-        ax.text(0.7, 0.1, 'em{:.2f}'.format(df.loc[loc, 'em']), bbox={'facecolor': 'w', 'alpha': 0.5,
+        ax.text(0.7, 0.1, 'em{:.2f}'.format(em_loc), bbox={'facecolor': 'w', 'alpha': 0.5,
                                          'pad': 5}, transform=ax.transAxes, ha='center')
         ax.set_xlabel('Temperature (ºC)')
         ax.set_ylabel('Depth (mb)')
@@ -176,11 +177,11 @@ def animate_profile_evolution(df, tems, depth, filename, optional_mld=None,
     zz = np.linspace(0, 175, 300)
 
     fig, ax = plt.subplots(figsize=(6.5, 6))
-    ax.set_xlim((10, 20))
+    ax.set_xlim(11, 16)
     ax.set_xlabel('Temperature (ºC)')
     ax.set_ylabel('Depth (db)')
     ax.set_ylim(np.max(depth) + 3, 0)
-    ax.set_xlim(11, 25)
+    ax.set_xlim(11, 16)
     fig.tight_layout()
 
     points, = ax.plot([], [], 'o', mfc='None', mec='tab:red')
@@ -270,8 +271,10 @@ def plot_column_temperature(temp, date, pres, df_fit=None, interval=120, lims=[N
                             smooth=True, ylims=None, wide=True, save=False):
 
     if isinstance(lims[0], datetime):
-        lims = [date_to_idx(date, lim) for lim in lims]
-
+        lims[0] = date_to_idx(date, lims[0])
+    
+    if isinstance(lims[1], datetime):
+        lims[1] = date_to_idx(date, lims[1])
 
     if isinstance(interval, timedelta):
         interval = timedelta_to_interval(interval)

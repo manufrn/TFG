@@ -2,8 +2,7 @@
 #
 # Set color cycle
 axes.prop_cycle : cycler('color', ['4477AA', 'EE6677', '228833', 'CCBB44', '66CCEE', 'AA3377', 'BBBBBB'])
-
-# Set default figure size
+# axes.prop_cycle : cycler('color', ['EE7733', '0077BB', '33BBEE', 'EE3377', 'CC3311', '009988', 'BBBBBB'])
 figure.figsize : 5, 3.75
 
 # Set x axis
