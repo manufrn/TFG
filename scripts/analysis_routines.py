@@ -46,6 +46,14 @@ def load_time_series(filename, latlon=False, convert_date=True):
     else:
         return temp, depth, date
 
+def load_time_series_xr(filename):
+
+    file_path = data_dir / 'time_series' / filename
+    data = xr.open_dataset(file_path)
+    data.coords['date'] = pd.to_datetime(data['date'], unit='s')
+    return data
+
+    
 
 def load_SHDR_fit(filename, convert_date=True):
     '''Load  saved SHDR fit as filename in data_dir/SHDR_fit.
@@ -63,12 +71,12 @@ def load_SHDR_fit(filename, convert_date=True):
 
     if convert_date:
         try:
-            df_fit['date'] = df_fit['Dates'].parallel_apply(lambda x: datetime.utcfromtimestamp(x))
-            # df_fit['Date'] = pd.to_datetime(df_fit['Dates'], unit='s', utc=True)
-            # df_fit.rename(columns=({'Dates': 'date'}), inplace=True)
+            df_fit['date'] = pd.to_datetime(df_fit['Dates'], unit='s')
+
         except:
-            df_fit['date'] = df_fit['date'].parallel_apply(lambda x: datetime.utcfromtimestamp(x))
-            # df_fit['date'] = pd.to_datetime(df_fit['date'], unit='s', utc=True)
+            df_fit['date'] = pd.to_datetime(df_fit['date'], unit='s')
+    
+    df_fit.set_index('date', inplace=True)
 
     return df_fit
 
@@ -92,20 +100,19 @@ def get_fit_metadata(filename):
             return metadata_string
 
 
-def fit_function(z, df, loc):
+def fit_function(z, df, date_i):
     '''Return value of idealized fit function for datapoint at loc. loc can be
     integer pointing to position of datapoint or datetime object.
     '''
     
-    # check if inputed loc is datetime object and convert it to iloc
-    if isinstance(loc, datetime):
-        loc = date_to_idx(df['date'], loc)
-    
-    fit = df.iloc[loc]
+    if isinstance(date_i, int):
+        fit = df.iloc[date_i]
+
+    else:
+        fit = df.loc[date_i]
     
     D1, b2, c2 = fit['D1'], fit['b2'], fit['c2']
     b3, a2, a1 = fit['b3'], fit['a2'], fit['a1']
-
 
     pos = np.where(z >= D1, 1.0, 0.0)  # check if z is above or bellow MLD
     zaux = - (z - D1) * (b2 + (z - D1) * c2)
