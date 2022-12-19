@@ -2,15 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pycwt
 import sys
+import xarray as xr
 from datetime import datetime, timedelta
 from analysis_routines import *
 from config import data_dir
 import matplotlib.gridspec as gs
 from scipy.signal.windows import boxcar
 
-def detrend_and_normalize(temp, time):
-    p = np.polyfit(time - time[0], temp, 1)
-    temp_notrend = temp - np.polyval(p, time - time[0])
+def detrend_and_normalize(temp):
+    pseudo_time = range(len(temp))
+    p = np.polyfit(pseudo_time, temp, 1)
+    temp_notrend = temp - np.polyval(p, pseudo_time)
     std = temp_notrend.std()  # standard deviation
     var = std ** 2  # variance
     temp_norm = temp_notrend / std
@@ -84,16 +86,18 @@ def complete_plot(temp, time, power, period, coi, sig95, levels, dt):
     fig.tight_layout()
     plt.show()
 
-def new_complete_plot(temp, time, power, period, coi, sig95, levels, glbl_power, glbl_signif, fft_theor, fftfreqs, depth):
-    dt = float(time[1] - time[0])
+def new_complete_plot(temp, time, power, period, coi, sig95, levels, glbl_power, glbl_signif, fft_theor, fftfreqs):
+    # dt = float(time[1] - time[0])
+
+    dt = int(np.asarray((time[1] - time[0]), dtype='timedelta64[s]').item().total_seconds())
     
     plt.rcParams.update({'font.size': 12})
-    time = np.array([datetime.fromtimestamp(t) for t in time])
+    # time = np.array([datetime.fromtimestamp(t) for t in time])
     gs = plt.GridSpec(2, 3, width_ratios=[1,1, 0.5], height_ratios=[1, 3])
     fig = plt.figure(figsize=(14, 8))
     ax1 = fig.add_subplot(gs[0, :2])
     ax1.plot(time, temp, 'k', lw=1)
-    ax1.set_title('a) Water temperature at depth {:.0f} m'.format(depth))
+    # ax1.set_title('a) Water temperature at depth {:.0f} m'.format(depth))
     ax1.set_ylabel('Temperature (ºC)')
 
 
@@ -105,7 +109,7 @@ def new_complete_plot(temp, time, power, period, coi, sig95, levels, glbl_power,
     ax2.contour(time, np.log2(period), sig95, [-99, 1], colors='k', linewidths=0.5,
                extent=extent)
     ax2.set_ylim(max(np.log2(period)), min(np.log2(period)))
-    dt = timedelta(seconds=dt)
+    dt = np.timedelta64(dt, 's')
     ax2.fill(np.concatenate([time, time[-1:] + dt, time[-1:] + dt,
                            time[:1] - dt, time[:1] - dt]),
         np.concatenate([np.log2(coi), [1e-9], np.log2(period[-1:]),
@@ -134,13 +138,44 @@ def new_complete_plot(temp, time, power, period, coi, sig95, levels, glbl_power,
     # plt.setp(ax3.get_yticklabels(), visible=False)
 
     fig.tight_layout()
-    fig.savefig('Hey.png', dpi=100)
+    # fig.savefig('Hey.png', dpi=100)
     plt.show()
 
 def smooth(y, n):
     y_smoothed = np.convolve(y, boxcar(n), mode='valid')
     return y_smoothed
 
+
+def wavelet_power_spectrum(variable, date, period=[None, None, 6]):
+
+    slice_ = slice(*period)
+    if isinstance(variable, xr.core.dataarray.DataArray):
+        variable = variable.loc[slice_].data
+        date = date.loc[slice_].data
+
+    if isinstance(variable, pd.Series):
+        variable = variable.loc[slice_].to_numpy()
+        date = date.loc[slice_].to_numpy()
+
+
+    mother = pycwt.Morlet(6)
+    dt = np.asarray((date[1] - date[0]), dtype='timedelta64[s]').item().total_seconds()
+    dj = 0.25
+
+    variable_norm, var = detrend_and_normalize(variable)
+
+
+    power, scales, period, coi, fft_power, fft_freqs = wavelet_spectrum(variable, mother,
+                                                                        dt, dj)
+    
+    sig95, glbl_power, glbl_signif, fft_theor = significance(variable, power, mother, dt, scales, var)
+
+    power /= scales[:, None]
+
+    levels = np.array([0.0625, 0.125, 0.25, 0.5, 1, 2, 4, 8])/2**7
+    new_complete_plot(variable, date, power, period, coi, sig95, levels, glbl_power, glbl_signif, fft_theor, fft_freqs)
+
+    
 if __name__ == '__main__':
      
     
@@ -172,6 +207,7 @@ if __name__ == '__main__':
     temp_norm, var = detrend_and_normalize(temp, time)
 
     # temp = smooth(temp, 3)
+
 
     power, scales, period, coi, fft_power, fft_freqs = wavelet_spectrum(temp_norm, mother,
                                                                         dt, dj)

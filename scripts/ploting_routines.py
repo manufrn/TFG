@@ -60,7 +60,8 @@ def plot_profile_fit(df, temp, depth, loc, save=False):
     '''
 
     if isinstance(loc, datetime):
-        loc = date_to_idx(df['date'], loc)
+        try:
+            loc = date_to_idx(df['date'], loc)
 
 
     temp_loc = if_masked_to_array(temp[loc])
@@ -346,3 +347,22 @@ def plot_column_temperature(temp, date, pres, df_fit=None, interval=120, lims=[N
 def display_video(filename):
     video_path = reports_dir / 'movies' / filename
     return Video(video_path, embed=True, width=500)
+
+def plot_interpolation(z, y, z_int, y_int):
+    if isinstance(z, np.ma.core.MaskedArray):
+        z = np.asarray(z[z.mask==False])
+        y = np.asarray(y[y.mask==False])
+
+    z = z[np.isfinite(y)]
+    y = y[np.isfinite(y)]
+
+    fig, ax = plt.subplots(figsize=(4, 4.6875))
+    ax.scatter(y, z, marker='o', fc='None', ec='tab:blue', s=22)
+    ax.scatter(y_int, z_int, marker='x')
+    #ax.plot(y_int, z_int)
+    ax.set_ylim(z[-1] + 10, 0)
+    ax.set_xlim(9.5, 18)
+    ax.set_xlabel('Temperature (ºC)')
+    ax.set_ylabel('Depth (mb)')
+    fig.tight_layout()
+    plt.show()

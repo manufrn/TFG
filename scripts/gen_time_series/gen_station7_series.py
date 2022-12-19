@@ -12,8 +12,8 @@ output_path = data_dir / 'time_series' / 'station7_more_profiles.nc'
 
 station7_complete = loadmat(data_path)  
 # date_slice = np.s_[238:244]
-date_slice = np.s_[180:244]
-pres_slice = np.s_[:450]
+# date_slice = np.s_[180:244]
+# pres_slice = np.s_[:450]
 
 masked_temp = np.ma.masked_invalid(np.squeeze(station7_complete['tems'])).T
 masked_temp = masked_temp[date_slice, pres_slice]

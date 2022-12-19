@@ -109,7 +109,18 @@ def bandstop_filter(signal, sampling_rate, lowcut, highcut, order=4):
 
 #### UTIDE ####
 
-def coef_dataframe(date, value, lat=43.789):
+def coef_dataframe(value, date=None, period=[None, None], lat=43.789):
+
+    if date is None:
+        slice_ = slice(*period)
+        date = np.asarray(value[slice_].index)
+        value = np.squeeze(value[slice_].to_numpy())
+
+    else:
+        slice_ = slice(*period)
+        value = np.asarray(value[slice_])
+        date = date[slice_]
+
     coef = solve(date, value, lat=lat, nodal=False, verbose=False)
     columns = ['A', 'A_ci', 'g', 'g_ci']
     data_dict = dict((k, coef[k]) for k in ['name', 'PE', 'SNR', 'A', 'A_ci', 'g', 'g_ci'] if k in coef)
@@ -130,42 +141,34 @@ class TidalComponentsFit:
     @classmethod
     def compute(cls, df, variables=None, period=[None, None], lat=43.789):
         
-        if len(period) != 3:
-            slice_ = slice(period[0], period[1], 6)
-        
-        else:
-            slice_ = slice(*period)
-        
-        df = df[slice_]
-        date = df.index
         
         if variables is None:
             variables = ['D1', 'b2', 'c2', 'a2']
         
         if 'D1' in variables:
-            D1 = df['D1'].to_numpy()
-            df_D1 = coef_dataframe(date, D1, lat=lat)
+            D1 = df['D1']
+            df_D1 = coef_dataframe(D1, period=period, lat=lat)
         
         else:
             df_D1 = None
         
         if 'b2' in variables:
-            b2 = df['b2'].to_numpy()
-            df_b2 = coef_dataframe(date, b2, lat=lat)
+            b2 = df['b2']
+            df_b2 = coef_dataframe(b2, period=period, lat=lat)
         
         else:
             df_b2 = None
             
         if 'c2' in variables:
-            c2 = df['c2'].to_numpy()
-            df_c2 = coef_dataframe(date, c2, lat=lat)
+            c2 = df['c2']
+            df_c2 = coef_dataframe(c2, period=period, lat=lat)
         
         else:
             df_c2 = None
             
         if 'a2' in variables:
-            a2 = df['a2'].to_numpy()
-            df_a2 = coef_dataframe(date, a2, lat=lat)
+            a2 = df['a2']
+            df_a2 = coef_dataframe(a2, period=period, lat=lat)
         
         else:
             df_a2 = None

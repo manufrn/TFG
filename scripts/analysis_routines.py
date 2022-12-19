@@ -55,7 +55,7 @@ def load_time_series_xr(filename):
 
     
 
-def load_SHDR_fit(filename, convert_date=True):
+def load_SHDR_fit(filename, convert_date=True, deprecated=False):
     '''Load  saved SHDR fit as filename in data_dir/SHDR_fit.
     Returns data frame containing fit of time series.
     '''
@@ -76,7 +76,8 @@ def load_SHDR_fit(filename, convert_date=True):
         except:
             df_fit['date'] = pd.to_datetime(df_fit['date'], unit='s')
     
-    df_fit.set_index('date', inplace=True)
+    if not deprecated:
+        df_fit.set_index('date', inplace=True)
 
     return df_fit
 
@@ -105,7 +106,7 @@ def fit_function(z, df, date_i):
     integer pointing to position of datapoint or datetime object.
     '''
     
-    if isinstance(date_i, int):
+    if isinstance(date_i, (int, np.integer)):
         fit = df.iloc[date_i]
 
     else:
@@ -113,6 +114,22 @@ def fit_function(z, df, date_i):
     
     D1, b2, c2 = fit['D1'], fit['b2'], fit['c2']
     b3, a2, a1 = fit['b3'], fit['a2'], fit['a1']
+
+    pos = np.where(z >= D1, 1.0, 0.0)  # check if z is above or bellow MLD
+    zaux = - (z - D1) * (b2 + (z - D1) * c2)
+    f = a1 + pos * (b3 * (z - D1) + a2 *(np.exp(zaux) - 1.0))
+    return f
+
+
+
+def fit_function_row(z, row):
+    '''Return value of idealized fit function for datapoint at loc. loc can be
+    integer pointing to position of datapoint or datetime object.
+    '''
+    
+    
+    D1, b2, c2 = row['D1'], row['b2'], row['c2']
+    b3, a2, a1 = row['b3'], row['a2'], row['a1']
 
     pos = np.where(z >= D1, 1.0, 0.0)  # check if z is above or bellow MLD
     zaux = - (z - D1) * (b2 + (z - D1) * c2)
@@ -211,10 +228,15 @@ def interpolate(z, y, z_values, insert=False):
         z = np.asarray(z[z.mask==False])
         y = np.asarray(y[y.mask==False])
 
+
+    z = z[np.isfinite(y)]
+    y = y[np.isfinite(y)]
+    
     if len(z) != len(np.unique(z)):
         idx = np.argmin((z[1:] - z[:-1])) + 1
         z = np.delete(z, idx)
         y = np.delete(y, idx)
+
 
     interp = interp1d(z, y, 'cubic')
 
