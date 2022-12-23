@@ -91,7 +91,7 @@ def plot_profile_fit(df, data, date_i, xlim=None, save=False):
     '''Plot measured vertical profile and fit for measure at loc
     '''
 
-    if isinstance(date_i, int):
+    if isinstance(date_i, (int, np.integer)):
         data_i = data.isel(date=date_i)
         mld = df.iloc[date_i]['D1']
 
@@ -179,9 +179,9 @@ def plot_multiple_profiles(df, data, dates_i, xlim=None):
 
     for ax, date_i in zip(axes, dates_i):
 
-        if isinstance(date_i, int):
+        if isinstance(date_i, (int, np.integer)):
             data_i = data.isel(date=date_i)
-            mld = df.iloc[date_i, 3]
+            mld = df.iloc[date_i]['D1']
             em = df.iloc[date_i]['em']
 
         else:
@@ -214,7 +214,7 @@ def plot_multiple_profiles(df, data, dates_i, xlim=None):
         ax.text(0.7, 0.1, 'em{:.2f}'.format(em), bbox={'facecolor': 'w', 'alpha': 0.5,
                                          'pad': 5}, transform=ax.transAxes, ha='center')
         ax.set_xlabel('Temperature (ºC)')
-        ax.set_ylabel('Depth (mb)')
+        ax.set_ylabel('Depth (db)')
         ax.set_title(date_i_str)
 
     fig.tight_layout()
@@ -375,7 +375,7 @@ def plot_column_temperature(data, df_fit=None, period=[None, None], smooth=True,
     cbar.ax.tick_params(which='minor', axis='y', right=False)
     fig.tight_layout()
     if save is not False:
-        fig.savefig(reports_dir / str(save))
+        fig.savefig(reports_dir / 'figures' / str(save))
     plt.show()
 
 

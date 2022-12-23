@@ -1,9 +1,10 @@
 import numpy as np
+import xarray as xr
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.fft import fft, fftfreq, ifft, rfft
 from scipy.signal.windows import boxcar
-from scipy.signal import welch, filtfilt, butter, lfilter, sosfilt
+from scipy.signal import welch, filtfilt, butter, lfilter, sosfilt, sosfiltfilt
 from utide import solve
 
 
@@ -97,7 +98,7 @@ def plot_spectrum(freqs, pxx, units, lims=None, x='freqs', vlines=None):
 
 #### FILTERING ####
 
-def bandstop_filter(signal, sampling_rate, lowcut, highcut, order=4):
+def bandstop_filter(signal, date,  sampling_rate, lowcut, highcut, order=4):
     nyq = 0.5 * sampling_rate
     low = lowcut / nyq
     high = highcut / nyq
@@ -106,6 +107,18 @@ def bandstop_filter(signal, sampling_rate, lowcut, highcut, order=4):
     filtered_signal = sosfilt(sos, signal)
     return filtered_signal
 
+def lowpass_filter(signal, date, sampling_rate, highcut, order=5):
+    # signal = np.pad(signal, (500, 500), 'constant', constant_values=(0, 0))
+    nyq = 0.5 * sampling_rate
+    high = highcut/ nyq
+    sos = butter(order, high, btype='lowpass', output='sos', analog=False)
+
+    filtered_signal = sosfiltfilt(sos, signal)
+    # filtered_signal = filtered_signal[1000:-500]
+    series_filtered_signal = pd.Series(filtered_signal, index=date)
+    return series_filtered_signal
+
+
 
 #### UTIDE ####
 
@@ -113,8 +126,14 @@ def coef_dataframe(value, date=None, period=[None, None], lat=43.789):
 
     if date is None:
         slice_ = slice(*period)
-        date = np.asarray(value[slice_].index)
-        value = np.squeeze(value[slice_].to_numpy())
+
+        if isinstance(value, pd.core.series.Series ):
+            date = np.asarray(value.loc[slice_].index)
+            value = np.squeeze(value.loc[slice_].to_numpy())
+
+        elif isinstance(value, xr.DataArray):
+            date = value.loc[slice_].indexes['date']
+            value = value.loc[slice_].data
 
     else:
         slice_ = slice(*period)

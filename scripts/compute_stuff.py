@@ -8,7 +8,7 @@ import multiprocessing as mp
 import tqdm as tqdm
 from config import data_dir
 from analysis_routines import * 
-from ploting_routines import *
+# from ploting_routines import *
 
 
 import dask.dataframe as dd
@@ -18,9 +18,9 @@ pbar.register()
 
 print('Loading time series...')
 # temp, pres, date = load_time_series('processed/AGL_20181116_chain.nc')
-# df_ci = load_SHDR_fit('optimal_server_fit/AGL_20181116_fit_fci.csv')
+df_ci = load_SHDR_fit('optimal_server_fit/AGL_20181116_fit_fci.csv')
 # df_c = load_SHDR_fit('optimal_server_fit/AGL_20181116_fit_fc.csv')
-df_s = load_SHDR_fit('optimal_server_fit/AGL_20181116_fit_s.csv')
+# df_s = load_SHDR_fit('optimal_server_fit/AGL_20181116_fit_s.csv')
 
 
 ### FIND MLD THRESHOLD
@@ -97,7 +97,27 @@ def G_alpha(row):
     
     return G_alpha
 
-ddf = dd.from_pandas(df_s, npartitions=10)
-series = ddf.apply(G_alpha, axis=1, meta=('x', 'f8'))  
+def delta_alpha(row):
+    alpha = 0.05
+    b2 = row['b2']
+    c2 = row['c2']
+    D1 = row['D1']
+    
+    # limite testeado experimentalmente siuu
+    if c2 < 1e-15:
+        delta_alpha = -np.log(alpha) / b2
+    
+    elif b2 == 0:
+        delta_alpha = np.sqrt(- np.log(alpha) / c2)
+    
+    else:
+        lambda_ = 2 * c2 / b2**2
+        delta_alpha = - b2 / 2 / c2 * (1 - np.sqrt(1 - 2*lambda_*np.log(alpha)))
+
+    return delta_alpha
+
+
+ddf = dd.from_pandas(df_ci, npartitions=10)
+series = ddf.apply(delta_alpha, axis=1, meta=('x', 'f8'))  
 series = series.compute()
-series.to_csv(data_dir / 'SHDR_fit' / 'aux' / 'G05_s.csv')
+series.to_csv(data_dir / 'SHDR_fit' / 'aux' / 'delta05_ci.csv')
