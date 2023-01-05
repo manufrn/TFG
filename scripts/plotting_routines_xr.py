@@ -11,7 +11,7 @@ from IPython.display import Video
 from config import data_dir, reports_dir
 
 
-def plot_fit_variable(df, variable, period=None, ylim=None, plot=True, wide=True):
+def plot_fit_variable(df, variable, period=None, ylim=None, xlim=None, plot=True, wide=True):
     '''Plot given fit variable (e.g D1, a1, ...) for time between lims and 
     with given interval.
     '''
@@ -40,6 +40,9 @@ def plot_fit_variable(df, variable, period=None, ylim=None, plot=True, wide=True
 
     if ylim is not None:
         ax.set_ylim(*ylim)
+
+    if xlim is not None:
+        ax.set_xlim(*xlim)
     
 
     ax.xaxis.set_major_locator(locator)
@@ -268,7 +271,7 @@ def animate_profile_evolution(df, data, filename, optional_mld=None, xlim=None,
 
 
 
-def plot_thermistor_temperature(data, idxs, period, wide=True):
+def plot_thermistor_temperature(data, idxs, period, xlim=None, wide=True):
     '''Plot a single thermistor temperature series 
     '''
     locator = mdates.AutoDateLocator(minticks=4, maxticks=None)
@@ -308,6 +311,11 @@ def plot_thermistor_temperature(data, idxs, period, wide=True):
 
         ax.plot(date_i, temp_i)
         ax.set_title('Temperature at depth {:.1f} db (ºC)'.format(depth_i))
+
+
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+
     fig.tight_layout()
     plt.show()
 
@@ -403,4 +411,66 @@ def plot_interpolation(z, y, z_int, y_int):
     fig.tight_layout()
     plt.show()
 
+def plot_AGL_data(ds, var, period=[None, None]):
+    
+    slice_ = slice(*period)
+    
+    if isinstance(var, list):
+        var_arr = np.sum([ds[i].loc[slice_] for i in var], axis=0)
+        
+    else:
+        var_arr = ds[var].loc[slice_]
+    date = ds.date.loc[slice_]
+    
+    locator = mdates.AutoDateLocator(minticks=4, maxticks=None)
+    formatter = mdates.ConciseDateFormatter(locator)
+    minor_locator = mdates.AutoDateLocator(minticks=6)
+    
+    fig, ax = plt.subplots(figsize=(7, 3.75))
+    ax.xaxis.set_major_locator(locator)
+    ax.set_xlim(date[0], date[-1])
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(formatter)
+    ax.xaxis.set_minor_locator(minor_locator)
+    ax.plot(date, var_arr)
+    ax.set_title(var)
+    fig.tight_layout()
+    plt.show()
 
+
+def plot_spectrum(freqs, pxx, dof, x_units, y_units=None, xlim=None, ylim=None, x='freqs', vlines=None):
+    period = 1/freqs
+
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    fig, ax = plt.subplots()
+
+    if x == 'freqs':
+        ax.loglog(freqs, pxx)
+        ax.set_xlabel(r'frecuency ({})'.format(x_units))
+        
+    elif x == 'period':
+        ax.loglog(period, pxx)
+        ax.set_xlabel(r'Period ({})'.format(x_units))
+
+
+    if xlim != None:
+        ax.set_xlim(*xlim)
+
+    if ylim != None:
+        ax.set_ylim(*ylim)
+
+    if vlines != None:
+        for i in vlines:
+            ax.axvline(i, ls='--', c='grey')
+
+    if y_units is not None:
+        y_units = y_units + r'$^{2}$ ' + x_units + r'$^{-1}$'
+        ax.set_ylabel('Spectral density ({})'.format(y_units))
+    else:
+        ax.set_ylabel('Spectral density')
+
+
+    ax.text(0.06, 0.07, '{} degrees of freedom'.format(int(dof)), transform=ax.transAxes, ha='left',
+            fontsize=9, color=colors[0])
+
+    plt.show()

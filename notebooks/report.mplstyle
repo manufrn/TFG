@@ -1,0 +1,50 @@
+# Matplotlib style for Jupyter notebooks
+#
+# Set color cycle
+axes.prop_cycle : cycler('color', ['4477AA', 'EE6677', '228833', 'CCBB44', '66CCEE', 'AA3377', 'BBBBBB'])
+# axes.prop_cycle : cycler('color', ['EE7733', '0077BB', '33BBEE', 'EE3377', 'CC3311', '009988', 'BBBBBB'])
+figure.figsize : 5, 3.75
+
+# Set x axis
+xtick.direction : in
+#xtick.major.size : 4.3
+#xtick.major.width : 0.7
+#xtick.minor.size : 2.15
+#xtick.minor.width : 0.7
+xtick.minor.visible : True
+xtick.top : True
+
+# Set y axis
+ytick.direction : in
+#ytick.major.size : 4.3
+#ytick.major.width : 0.7
+#ytick.minor.size : 2.15
+#ytick.minor.width : 0.7
+ytick.minor.visible : True
+ytick.right : True
+
+# Fontsizes
+xtick.labelsize : 12
+ytick.labelsize : 12
+legend.fontsize : 12
+legend.title_fontsize : 12
+axes.titlesize : 12
+axes.labelsize : 12
+
+# Set line widths
+axes.linewidth : 0.7
+grid.linewidth : 0.7
+lines.linewidth : 1.4
+lines.markersize : 4.3
+
+# Remove legend frame
+legend.frameon : True
+
+# Use serif fonts
+# font.serif : Times
+font.family : serif
+mathtext.fontset : dejavuserif
+
+# Use LaTeX for math formatting
+text.usetex : True
+text.latex.preamble : \usepackage{amsmath} \usepackage{amssymb}

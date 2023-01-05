@@ -81,7 +81,11 @@ def G_alpha(row):
     c2 = row['c2']
     D1 = row['D1']
     
-    if c2 == 0:
+    if c2 < 1e-15 and b2 < 1e-15:
+        G_alpha = 0
+        return G_alpha
+
+    if c2 < 1e-15:
         delta_alpha = -np.log(alpha) / b2
     
     elif b2 == 0:
@@ -92,8 +96,8 @@ def G_alpha(row):
         delta_alpha = - b2 / 2 / c2 * (1 - np.sqrt(1 - 2*lambda_*np.log(alpha)))
         
     z_alpha = delta_alpha + D1
-    f_z_alpha = fit_function_row(z_alpha, row)
-    G_alpha = (fit_function_row(D1, row) - f_z_alpha) / delta_alpha
+    f_z_alpha = fit_function_row(row, z_alpha)
+    G_alpha = (fit_function_row(row, D1) - f_z_alpha) / delta_alpha
     
     return G_alpha
 
@@ -118,6 +122,7 @@ def delta_alpha(row):
 
 
 ddf = dd.from_pandas(df_ci, npartitions=10)
-series = ddf.apply(delta_alpha, axis=1, meta=('x', 'f8'))  
+series = ddf.apply(G_alpha, axis=1, meta=('x', 'f8'))  
 series = series.compute()
-series.to_csv(data_dir / 'SHDR_fit' / 'aux' / 'delta05_ci.csv')
+series.to_csv(data_dir / 'SHDR_fit' / 'aux' / 'G05.csv')
+

@@ -99,7 +99,6 @@ def new_complete_plot(temp, time, power, period, coi, sig95, levels, glbl_power,
     fig = plt.figure(figsize=(14, 8))
     ax1 = fig.add_subplot(gs[0, :2])
     ax1.plot(time, temp, 'k', lw=1)
-    print(min(temp))
     # ax1.set_title('a) Water temperature at depth {:.0f} m'.format(depth))
     ax1.set_ylabel('Temperature (ºC)')
 
@@ -124,13 +123,11 @@ def new_complete_plot(temp, time, power, period, coi, sig95, levels, glbl_power,
     if ylim is not None:
         ax2.set_ylim(*ylim)
         yticks = 2 ** np.arange(np.log2(ylim[1]), np.log2(ylim[0]))
-        print(yticks)
 
     else:
         ax2.set_ylim(max(np.log2(period)), min(np.log2(period)))
         yticks = 2 ** np.arange(np.ceil(np.log2(period.min())),
                             np.ceil(np.log2(period.max())))
-        print(yticks)
 
     ax2.set_yticks(np.log2(yticks))
     ax2.set_yticklabels(yticks)
@@ -160,7 +157,7 @@ def smooth(y, n):
     return y_smoothed
 
 
-def wavelet_power_spectrum(variable, date, period=[None, None, 6], ylim=None):
+def wavelet_power_spectrum(variable, date, period=[None, None, 6], ylim=None, norm_levels=2**7):
 
     slice_ = slice(*period)
 
@@ -204,7 +201,7 @@ def wavelet_power_spectrum(variable, date, period=[None, None, 6], ylim=None):
 
     power /= scales[:, None]
 
-    levels = np.array([0.0625, 0.125, 0.25, 0.5, 1, 2, 4, 8])/2**7
+    levels = np.array([0.0625, 0.125, 0.25, 0.5, 1, 2, 4, 8])/norm_levels
     new_complete_plot(variable, date_seconds, power, period, coi, sig95, levels, glbl_power, glbl_signif, fft_theor, fft_freqs, fft_power, var, ylim=ylim)
 
     

@@ -83,10 +83,8 @@ def load_SHDR_fit(filename, convert_date=True, deprecated=False):
 
 def load_buoy_series(filename):
     ds = xr.open_dataset(data_dir / 'buoy_time_series' / filename)
-    df = ds.to_dataframe()
-    df['date'] = df['date'].apply(lambda x: datetime.utcfromtimestamp(x))
-    df.set_index('date', inplace=True)
-    return df
+    ds.coords['date'] = pd.to_datetime(ds['date'], unit='s')
+    return ds
 
 
 def get_fit_metadata(filename):
@@ -122,7 +120,7 @@ def fit_function(z, df, date_i):
 
 
 
-def fit_function_row(z, row):
+def fit_function_row(row, z):
     '''Return value of idealized fit function for datapoint at loc. loc can be
     integer pointing to position of datapoint or datetime object.
     '''

@@ -65,47 +65,32 @@ def windowed_spectrum(x, dt, window_time, n_smooth, window='hann'):
     ''' Perform a windowed fourier transmor over time series x with
     spacing dt. Smooth out the results.
     '''
+    # x = smooth(x, n_smooth)
+
     N = len(x)
     window_n = window_time/dt
+    window = ('kaiser', 3.0)
     freqs, psd = welch(x, fs=1/dt, nperseg=window_n, window=window, detrend='linear')
-    #freqs = smooth(freqs, n_smooth)
-    #psd = smooth(psd, n_smooth)
-    
-    return freqs, psd
+    freqs = smooth(freqs, n_smooth)
+    psd = smooth(psd, n_smooth)
 
-def plot_spectrum(freqs, pxx, units, lims=None, x='freqs', vlines=None):
-    period = 1/freqs
-    fig, ax = plt.subplots()
+    dof = (N//(window_n//2) - 1)*2*n_smooth   
 
-    if x == 'freqs':
-        ax.loglog(freqs, pxx)
-        ax.set_xlabel(r'frecuency ({})'.format(units))
-        
-    elif x == 'period':
-        ax.loglog(period, pxx)
-        ax.set_xlabel(r'Period ({})'.format(units))
+    return freqs, psd, dof
 
-    if lims != None:
-        ax.set_xlim(*lims)
-
-    if vlines != None:
-        for i in vlines:
-            ax.axvline(i, ls='--', c='grey')
-
-    ax.set_ylabel(r'Power spectral density'.format(units))
-    plt.show()
 
 
 #### FILTERING ####
 
-def bandstop_filter(signal, date,  sampling_rate, lowcut, highcut, order=4):
+def bandstop_filter(signal, date, sampling_rate, lowcut, highcut, order=5):
     nyq = 0.5 * sampling_rate
     low = lowcut / nyq
     high = highcut / nyq
     sos = butter(order, [low, high], btype='bandstop', output='sos')
 
-    filtered_signal = sosfilt(sos, signal)
-    return filtered_signal
+    filtered_signal = sosfiltfilt(sos, signal)
+    series_filtered_signal = pd.Series(filtered_signal, index=date)
+    return series_filtered_signal
 
 def lowpass_filter(signal, date, sampling_rate, highcut, order=5):
     # signal = np.pad(signal, (500, 500), 'constant', constant_values=(0, 0))
@@ -162,7 +147,7 @@ class TidalComponentsFit:
         
         
         if variables is None:
-            variables = ['D1', 'b2', 'c2', 'a2']
+            variables = ['D1', 'a2']
         
         if 'D1' in variables:
             D1 = df['D1']
@@ -204,3 +189,23 @@ class TidalComponentsFit:
                 df_var = df_var[df_var['A'] > df_var['A_ci']]
                 df_var = df_var[df_var['PE'] > 1]
                 setattr(self, var, df_var)
+
+class column_coefs:
+    def __init__(self, depths):
+        self.depths = depths
+
+    def compute(self, data, period=[None, None, 6], lat=43.789):
+        slice_ = slice(*period)
+        for depth in self.depths:
+            temp = data.temp.sel(date=slice_, depth=depth)
+            coef = coef_dataframe(temp, period=period, lat=lat)
+            setattr(self, 'd' + str(depth), coef)
+            
+    def clean(self):
+        for depth in self.depths:
+            coef = getattr(self, 'd' + str(depth))
+            coef = coef[coef['SNR'] > 2.0]
+            coef = coef[coef['A'] > coef['A_ci']]
+            coef = coef[coef['PE'] > 1]
+            setattr(self, 'd' + str(depth), coef)        
+
