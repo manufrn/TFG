@@ -8,6 +8,7 @@ import matplotlib.dates as mdates
 from datetime import datetime, timedelta
 from analysis_routines import *
 from IPython.display import Video
+from scipy.stats import chi2
 from config import data_dir, reports_dir
 
 
@@ -330,6 +331,11 @@ def plot_column_temperature(data, df_fit=None, period=[None, None], smooth=True,
         slice_ = slice(*period)
 
     data_period = data.sel(date=slice_)
+
+    if ylims is not None:
+        bfill = data_period.depth.sel(depth=ylims[0], method='bfill')
+        # data_period = data_period.where(data_period.depth < ylims[0], drop=True)
+        data_period = data_period.sel(depth=(slice(ylims[1], bfill)))
     temp = data_period.temp
     date = data_period.date
     depths = data_period.depth

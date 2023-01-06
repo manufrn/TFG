@@ -24,12 +24,12 @@ ytick.minor.visible : True
 ytick.right : True
 
 # Fontsizes
-xtick.labelsize : 12
-ytick.labelsize : 12
-legend.fontsize : 12
-legend.title_fontsize : 12
-axes.titlesize : 12
-axes.labelsize : 12
+xtick.labelsize : 10
+ytick.labelsize : 10
+legend.fontsize : 10
+legend.title_fontsize : 10
+axes.titlesize : 10
+axes.labelsize : 10
 
 # Set line widths
 axes.linewidth : 0.7
@@ -42,9 +42,15 @@ legend.frameon : True
 
 # Use serif fonts
 # font.serif : Times
-font.family : serif
-mathtext.fontset : dejavuserif
+font.family : sans-serif
+mathtext.fontset : dejavusans
 
 # Use LaTeX for math formatting
 text.usetex : True
-text.latex.preamble : \usepackage{amsmath} \usepackage{amssymb}
+
+# In general, we need to be careful with the preamble. A common font for
+# sans serif LaTeX is cmbright. However, it does not support bold fontweights
+# so we use sfmath instead. 
+text.latex.preamble : \usepackage{amsmath} \usepackage{amssymb} \usepackage{sfmath}
+
+# Use LaTeX for math formatting

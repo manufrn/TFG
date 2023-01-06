@@ -9,6 +9,7 @@ from harmonic_analysis import lowpass_filter
 from config import data_dir
 import matplotlib.gridspec as gs
 from scipy.signal.windows import boxcar
+from scipy.stats import chi2
 
 def detrend_and_normalize(temp, time):
     pseudo_time = range(len(temp))
@@ -186,7 +187,7 @@ def wavelet_power_spectrum(variable, date, period=[None, None, 6], ylim=None, no
 
 
 
-    mother = pycwt.Morlet(8)
+    mother = pycwt.Morlet(6)
     dt = np.asarray((date[1] - date[0]), dtype='timedelta64[s]').item().total_seconds()
     dj = 0.25
 
