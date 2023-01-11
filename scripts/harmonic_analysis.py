@@ -10,8 +10,8 @@ from utide import solve
 
 #### UTILITIES ####
 
-def smooth(y, n):
-    y_smoothed = np.convolve(y, boxcar(n), mode='valid') / n
+def smooth(y, n, mode='valid'):
+    y_smoothed = np.convolve(y, boxcar(n), mode=mode) / n
     return y_smoothed
 
 def detrend(x):
@@ -43,8 +43,6 @@ def spectrum(x, dt, n_smooth):
     '''
     n = len(x)
     x = detrend(x)
-    #win_weights = quadwin(n)
-    #x *= win_weights
     
     pslice = slice(1, n//2)
     freqs = fftfreq(n, d=dt)[pslice]
@@ -58,10 +56,11 @@ def spectrum(x, dt, n_smooth):
     freqs = smooth(freqs, n_smooth)
     psd = smooth(psd, n_smooth)
     power = smooth(power, n_smooth)
+    dof = 2*n_smooth
     
-    return freqs, amplitude, power, psd
+    return freqs, amplitude, power, psd, dof
 
-def windowed_spectrum(x, dt, window_time, n_smooth, window='hann'):
+def windowed_spectrum(x, dt, window_time, n_smooth):
     ''' Perform a windowed fourier transmor over time series x with
     spacing dt. Smooth out the results.
     '''
@@ -95,7 +94,7 @@ def bandstop_filter(signal, date, sampling_rate, lowcut, highcut, order=5):
 def lowpass_filter(signal, date, sampling_rate, highcut, order=5):
     # signal = np.pad(signal, (500, 500), 'constant', constant_values=(0, 0))
     nyq = 0.5 * sampling_rate
-    high = highcut/ nyq
+    high = highcut / nyq
     sos = butter(order, high, btype='lowpass', output='sos', analog=False)
 
     filtered_signal = sosfiltfilt(sos, signal)
@@ -107,7 +106,7 @@ def lowpass_filter(signal, date, sampling_rate, highcut, order=5):
 
 #### UTIDE ####
 
-def coef_dataframe(value, date=None, period=[None, None], lat=43.789):
+def coef_dataframe(value, date=None, period=[None, None], n_smooth=None, lat=43.789):
 
     if date is None:
         slice_ = slice(*period)
@@ -124,6 +123,11 @@ def coef_dataframe(value, date=None, period=[None, None], lat=43.789):
         slice_ = slice(*period)
         value = np.asarray(value[slice_])
         date = date[slice_]
+
+    if n_smooth is not None:
+        value = smooth(value, n_smooth)
+        date = date[n_smooth//2:len(value)+n_smooth//2]
+
 
     coef = solve(date, value, lat=lat, nodal=False, verbose=False)
     columns = ['A', 'A_ci', 'g', 'g_ci']

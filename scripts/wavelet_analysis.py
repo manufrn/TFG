@@ -5,7 +5,7 @@ import sys
 import xarray as xr
 from datetime import datetime, timedelta
 from analysis_routines import *
-from harmonic_analysis import lowpass_filter
+from harmonic_analysis import lowpass_filter, smooth
 from config import data_dir
 import matplotlib.gridspec as gs
 from scipy.signal.windows import boxcar
@@ -152,10 +152,6 @@ def new_complete_plot(temp, time, power, period, coi, sig95, levels, glbl_power,
     fig.tight_layout()
     # fig.savefig('Hey.png', dpi=100)
     plt.show()
-
-def smooth(y, n):
-    y_smoothed = np.convolve(y, boxcar(n), mode='valid')
-    return y_smoothed
 
 
 def wavelet_power_spectrum(variable, date, period=[None, None, 6], ylim=None, norm_levels=2**7):

@@ -480,3 +480,48 @@ def plot_spectrum(freqs, pxx, dof, x_units, y_units=None, xlim=None, ylim=None, 
             fontsize=9, color=colors[0])
 
     plt.show()
+
+
+def plot_column_oscilation(column_coefs, component, mld_coef, delta05_coef, pos1, pos2, x_arrow):
+    x = []
+    ci = []
+    depths = column_coefs.depths
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+    
+    mld_mean = mld_coef.attrs['mean']
+    mld_ampl = mld_coef.loc[component]['A']
+    delta_mean = delta05_coef.attrs['mean']
+
+    delta_ampl = delta05_coef.loc[component]['A']
+    for depth in depths:
+        coef = getattr(column_coefs, 'd' + str(depth))
+        value = coef.loc[component]['A']
+        confidence = coef.loc[component]['A_ci']
+        ci.append(confidence)
+        x.append(value)
+        
+    fig, ax = plt.subplots()
+    ax.scatter(x, depths)
+    ax.errorbar(x, depths, xerr=ci, marker='o', linestyle='none', lw=0.8, capsize=3, c='k')
+    ax.axhline(mld_mean, ls='--')
+    ax.axhline(mld_mean + delta_mean, ls='--', c=colors[1])
+    xlim = ax.get_xlim()
+    ax.set_ylim(max(depths) + 2, min(depths) - 2)
+    mld_mean_arr = np.full(2, mld_mean)
+    plt.fill_between((xlim[0], xlim[1]), (mld_mean_arr-mld_ampl), (mld_mean_arr+mld_ampl), color=colors[0], alpha=0.35)
+    plt.fill_between((xlim[0], xlim[1]), (mld_mean + delta_mean-delta_ampl), (mld_mean + delta_mean+delta_ampl), color=colors[1], alpha=0.35)
+
+    ax.set_xlim(*xlim)
+    ax.set_xlabel('Oscilation amplitude (ºC)')
+    ax.set_ylabel('Depth')
+    ax.set_title('Tidal component ' + component)
+    ax.arrow(x = x_arrow, y = mld_mean - mld_ampl, dy=2*mld_ampl, dx=0, width=0.0008, length_includes_head=True, head_width=0.01, head_length=2, color='k')
+    ax.arrow(x = x_arrow, y = mld_mean + mld_ampl, dy=-2*mld_ampl, dx=0, width=0.0008, length_includes_head=True, head_width=0.01, head_length=2, color='k')
+
+    ax.arrow(x = x_arrow, y = mld_mean + delta_mean - delta_ampl, dy=2*delta_ampl, dx=0, width=0.0008, length_includes_head=True, head_width=0.01, head_length=2, color='k')
+    ax.arrow(x = x_arrow, y = mld_mean + delta_mean + delta_ampl, dy=-2*delta_ampl, dx=0, width=0.0008, length_includes_head=True, head_width=0.01, head_length=2, color='k')
+    ax.text(pos1[0], pos1[1], 'MLD oscilation amplitude', transform=ax.transAxes)
+    ax.text(pos2[0], pos2[1], r'$\Delta_{0.05}$ oscilation amplitude', transform=ax.transAxes)
+    
+    plt.show()

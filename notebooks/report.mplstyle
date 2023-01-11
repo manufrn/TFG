@@ -54,3 +54,5 @@ text.usetex : True
 text.latex.preamble : \usepackage{amsmath} \usepackage{amssymb} \usepackage{sfmath}
 
 # Use LaTeX for math formatting
+#
+axes.formatter.use_locale : True
