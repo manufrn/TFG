@@ -482,7 +482,8 @@ def plot_spectrum(freqs, pxx, dof, x_units, y_units=None, xlim=None, ylim=None, 
     plt.show()
 
 
-def plot_column_oscilation(column_coefs, component, mld_coef, delta05_coef, pos1, pos2, x_arrow):
+def plot_column_oscilation(column_coefs, component, mld_coef, delta05_coef, pos1, pos2, x_arrow, 
+                           ylim=None):
     x = []
     ci = []
     depths = column_coefs.depths
@@ -512,16 +513,56 @@ def plot_column_oscilation(column_coefs, component, mld_coef, delta05_coef, pos1
     plt.fill_between((xlim[0], xlim[1]), (mld_mean_arr-mld_ampl), (mld_mean_arr+mld_ampl), color=colors[0], alpha=0.35)
     plt.fill_between((xlim[0], xlim[1]), (mld_mean + delta_mean-delta_ampl), (mld_mean + delta_mean+delta_ampl), color=colors[1], alpha=0.35)
 
+    if ylim is not None:
+        ax.set_ylim(*ylim)
     ax.set_xlim(*xlim)
+
+
+    norm_x = xlim[1] - xlim[0]
+    norm_y = ax.get_ylim()[0] - ax.get_ylim()[1]
+
     ax.set_xlabel('Oscilation amplitude (ºC)')
     ax.set_ylabel('Depth')
     ax.set_title('Tidal component ' + component)
-    ax.arrow(x = x_arrow, y = mld_mean - mld_ampl, dy=2*mld_ampl, dx=0, width=0.0008, length_includes_head=True, head_width=0.01, head_length=2, color='k')
-    ax.arrow(x = x_arrow, y = mld_mean + mld_ampl, dy=-2*mld_ampl, dx=0, width=0.0008, length_includes_head=True, head_width=0.01, head_length=2, color='k')
+    ax.arrow(x = x_arrow, y = mld_mean - mld_ampl, dy=2*mld_ampl, dx=0, width=0.0008*norm_x,
+             length_includes_head=True, head_width=0.01*norm_x, head_length=0.02*norm_y, color='k')
+    ax.arrow(x = x_arrow, y = mld_mean + mld_ampl, dy=-2*mld_ampl, dx=0, width=0.0008*norm_x,
+             length_includes_head=True, head_width=0.01*norm_x, head_length=0.02*norm_y, color='k')
 
-    ax.arrow(x = x_arrow, y = mld_mean + delta_mean - delta_ampl, dy=2*delta_ampl, dx=0, width=0.0008, length_includes_head=True, head_width=0.01, head_length=2, color='k')
-    ax.arrow(x = x_arrow, y = mld_mean + delta_mean + delta_ampl, dy=-2*delta_ampl, dx=0, width=0.0008, length_includes_head=True, head_width=0.01, head_length=2, color='k')
-    ax.text(pos1[0], pos1[1], 'MLD oscilation amplitude', transform=ax.transAxes)
-    ax.text(pos2[0], pos2[1], r'$\Delta_{0.05}$ oscilation amplitude', transform=ax.transAxes)
+    ax.arrow(x = x_arrow, y = mld_mean + delta_mean - delta_ampl, dy=2*delta_ampl, dx=0, width=0.0008*norm_x,
+             length_includes_head=True, head_width=0.01*norm_x, head_length=0.02*norm_y, color='k')
+    ax.arrow(x = x_arrow, y = mld_mean + delta_mean + delta_ampl, dy=-2*delta_ampl, dx=0, width=0.0008*norm_x,
+             length_includes_head=True, head_width=0.01*norm_x, head_length=0.02*norm_y, color='k')
+    ax.text(pos1[0], pos1[1], 'MLD', transform=ax.transAxes)
+    ax.text(pos2[0], pos2[1], r'$\Delta_{0.05}$', transform=ax.transAxes)
     
+    plt.show()
+
+def plot_D1_and_G005(D1, G005, period=[None, None], xlim=None, ylim=None, save=None):
+    slice_ = slice(*period)
+    D1_ = D1.loc[slice_]
+    G005_ = G005.loc[slice_]
+    date = D1[slice_].index
+
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+    fig, ax1 = plt.subplots(figsize=(9.2, 3.75))
+    locator = mdates.AutoDateLocator(minticks=4, maxticks=None)
+    formatter = mdates.ConciseDateFormatter(locator)
+    minor_locator = mdates.AutoDateLocator(minticks=6)
+    ax1.xaxis.set_major_locator(locator)
+    ax1.xaxis.set_major_locator(locator)
+    ax1.xaxis.set_major_formatter(formatter)
+    ax1.xaxis.set_minor_locator(minor_locator)
+    ax1.plot(date, D1_)
+    ax1.set_ylabel(r'MLD (db)', color=colors[0])  # we already handled the x-label with ax1
+    #ylim = ax1.get_ylim()
+    #ax1.set_ylim(ylim[1], ylim[0])
+    ax1.tick_params(axis='y', colors=colors[0], which='both')
+
+
+    ax2 = ax1.twinx()
+    ax2.plot(date, G005_, color=colors[1])
+    ax2.tick_params(axis='y', colors=colors[1], which='both')
+    ax2.set_ylabel('$G_{0.05}$', color=colors[1])  # we already handled the x-label with ax1
     plt.show()

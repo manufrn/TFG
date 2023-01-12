@@ -121,8 +121,16 @@ def delta_alpha(row):
     return delta_alpha
 
 
-ddf = dd.from_pandas(df_ci, npartitions=10)
-series = ddf.apply(G_alpha, axis=1, meta=('x', 'f8'))  
-series = series.compute()
-series.to_csv(data_dir / 'SHDR_fit' / 'aux' / 'G05.csv')
+# ddf = dd.from_pandas(df_ci, npartitions=10)
+# series = ddf.apply(G_alpha, axis=1, meta=('x', 'f8'))  
+# series = series.compute()
+# series.to_csv(data_dir / 'SHDR_fit' / 'aux' / 'G05.csv')
+#
 
+
+from multitaper import MTSpec
+nw = 3.5
+kspec = 8
+dt = 5/60/60/23
+x = df_ci.D1.to_numpy()
+psd = MTSpec(x=x, nw=nw, kspec=kspec, dt=dt, iadapt=0)

@@ -6,6 +6,7 @@ from scipy.fft import fft, fftfreq, ifft, rfft
 from scipy.signal.windows import boxcar
 from scipy.signal import welch, filtfilt, butter, lfilter, sosfilt, sosfiltfilt
 from utide import solve
+from multitaper import MTSpec, MTCross
 
 
 #### UTILITIES ####
@@ -20,6 +21,11 @@ def detrend(x):
     p = np.polyfit(t, x, 1)
     x_detrended = x - np.polyval(p, t)
     return x_detrended
+
+def detrend_normalize(signal):
+    signal_detrended = detrend(signal)
+    signal_detrend_norm = signal_detrended/np.std(signal_detrended)
+    return signal_detrend_norm
 
 
 def period_to_freq(period, period_units):
@@ -77,11 +83,23 @@ def windowed_spectrum(x, dt, window_time, n_smooth):
 
     return freqs, psd, dof
 
+def multitapping_spectrum(x, dt, n_smooth, nw=3.5, kspec=4):
+    spectrum = MTSpec(x=x, nw=nw, kspec=kspec, dt=dt, iadapt=0)
+    freq, psd = spectrum.rspec()
+
+    psd = smooth(np.squeeze(psd), n_smooth)
+    freqs = freq[n_smooth//2:-n_smooth//2+1]
+    dof = spectrum.se[0]*n_smooth
+
+    del spectrum
+
+    return freqs, psd, dof
+
 
 
 #### FILTERING ####
 
-def bandstop_filter(signal, date, sampling_rate, lowcut, highcut, order=5):
+def bandstop_filter(signal, date, sampling_rate, lowcut, highcut, order=4):
     nyq = 0.5 * sampling_rate
     low = lowcut / nyq
     high = highcut / nyq
@@ -91,7 +109,18 @@ def bandstop_filter(signal, date, sampling_rate, lowcut, highcut, order=5):
     series_filtered_signal = pd.Series(filtered_signal, index=date)
     return series_filtered_signal
 
-def lowpass_filter(signal, date, sampling_rate, highcut, order=5):
+
+def bandpass_filter(signal, date, sampling_rate, lowcut, highcut, order=4):
+    nyq = 0.5 * sampling_rate
+    low = lowcut / nyq
+    high = highcut / nyq
+    sos = butter(order, [low, high], btype='bandpass', output='sos')
+
+    filtered_signal = sosfiltfilt(sos, signal)
+    series_filtered_signal = pd.Series(filtered_signal, index=date)
+    return series_filtered_signal
+
+def lowpass_filter(signal, date, sampling_rate, highcut, order=4):
     # signal = np.pad(signal, (500, 500), 'constant', constant_values=(0, 0))
     nyq = 0.5 * sampling_rate
     high = highcut / nyq

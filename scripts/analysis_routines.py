@@ -265,3 +265,13 @@ def find_MLD_threshold(temp, pres, threshold=0.2, interpolation=True):
     else:
         MLD = pres_loc[a]
     return MLD
+
+def print_component(fit, G05, comp):
+    amplitude = [fit.D1.A.loc[comp], fit.D1.A_ci.loc[comp], fit.a2.A.loc[comp], fit.a2.A_ci.loc[comp],
+                G05.A.loc[comp], G05.A_ci.loc[comp]]
+    
+    phase = [fit.D1.g.loc[comp], fit.D1.g_ci.loc[comp], fit.a2.g.loc[comp], fit.a2.g_ci.loc[comp],
+                G05.g.loc[comp], G05.g_ci.loc[comp]]
+    print(comp + ':')
+    print('ampl -> D1: {:.2f}+-{:.2f} m; a2: {:.5f}+-{:.5f} ºC; G05: {:.4f}+-{:.4f} ºC/m' .format(*amplitude))
+    print('fase -> D1: {:.2f}+-{:.2f} º; a2: {:.5f}+-{:.5f} º; G05: {:.4f}+-{:.4f} º'.format(*phase))
