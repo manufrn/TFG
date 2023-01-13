@@ -566,3 +566,52 @@ def plot_D1_and_G005(D1, G005, period=[None, None], xlim=None, ylim=None, save=N
     ax2.tick_params(axis='y', colors=colors[1], which='both')
     ax2.set_ylabel('$G_{0.05}$', color=colors[1])  # we already handled the x-label with ax1
     plt.show()
+
+def plot_multiple_profiles_ax(df, data, date_i, ylim=None):
+        
+    markers = ['o', 's', '^', 'v', '<', '>', 'd']
+    ls = ['-', '--', ':', '-.']
+
+    fig, ax = plt.subplots(figsize=(4.5, 4.6875))
+
+    for (i, date_) in enumerate(date_i): 
+        if isinstance(date_i, (int, np.integer)):
+            data_i = data.isel(date=date_, method='nearest')
+            mld = df.iloc[date_]['D1']
+
+        else:
+            data_i = data.sel(date=date_, method='nearest')
+                #mld = df.loc[i, 'D1']
+                
+        pres_i = data_i.meassured_depth.data
+        temp_i = data_i.temp.data
+        date_i_str = np.datetime_as_string(data_i.date, unit='s')
+        pres_i = pres_i[np.isfinite(temp_i)]
+        temp_i = temp_i[np.isfinite(temp_i)]
+        
+        # switch statement for seting label
+        match i:
+            case 0:
+                label_i = 't=0'
+                
+            case 1|2:
+                label_i = 't=' + str(i) + 'M$_2$/3'
+                
+            case 3:
+                label_i = 't=$M_2$'
+                
+        zz = np.linspace(1, pres_i[-1] + 5, 300)
+        ax.scatter(temp_i, pres_i, marker=markers[i], label=label_i)
+        ax.plot(fit_function(zz, df, date_), zz, lw=1.2, marker=' ', alpha=0.9, ls=ls[i])
+        
+        if ylim is None:
+            ax.set_ylim(135, 0)
+        else:
+            ax.set_ylim(*ylim)
+        ax.set_xlabel('Temperature (ºC)')
+        ax.set_ylabel('Profundidad (dbar)')
+    
+    ax.legend()
+    fig.tight_layout()   
+
+    plt.show()

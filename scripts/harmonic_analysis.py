@@ -83,18 +83,28 @@ def windowed_spectrum(x, dt, window_time, n_smooth):
 
     return freqs, psd, dof
 
-def multitapping_spectrum(x, dt, n_smooth, nw=3.5, kspec=4):
+
+def multitapping_spectrum(x, dt, n_smooth=None, nw=3.5, kspec=4):
     spectrum = MTSpec(x=x, nw=nw, kspec=kspec, dt=dt, iadapt=0)
     freq, psd = spectrum.rspec()
 
-    psd = smooth(np.squeeze(psd), n_smooth)
-    freqs = freq[n_smooth//2:-n_smooth//2+1]
-    dof = spectrum.se[0]*n_smooth
+    if n_smooth is None:
+        dof = spectrum.se[0]
+    else:
+        psd = smooth(np.squeeze(psd), n_smooth)
+        freqs = freq[n_smooth//2:-n_smooth//2+1]
+        dof = spectrum.se[0]*n_smooth
 
     del spectrum
 
     return freqs, psd, dof
 
+
+def smooth_spectrum(freq, pxx, dof, n_smooth):
+    pxx_s = smooth(pxx, n_smooth)
+    freq_s = freq[n_smooth//2:-n_smooth//2+1]
+    dof_s = dof*n_smooth
+    return freq_s, pxx_s, dof_s
 
 
 #### FILTERING ####

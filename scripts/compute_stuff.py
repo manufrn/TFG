@@ -37,29 +37,50 @@ df_ci = load_SHDR_fit('optimal_server_fit/AGL_20181116_fit_fci.csv')
 
 
 # ### QUALITY INDEXES
-# def quality_index(MLD, y, z, interpolation=False):
-#     z = if_masked_to_array(z)
-#     y = if_masked_to_array(y)
-#     if interpolation:      
-#         zz = np.array([13, 18, 38, 48, 58, 68, 73, 84, 90, 102, 114, 
-#                     120, 131, 136, 141, 146, 156, 161, 166, 171])
-#         z, y = interpolate(z, y, zz, True)
-#         
-#     idx_MLD = np.searchsorted(z, MLD)
-#     z_ML = z[:idx_MLD]
-#     y_ML = y[:idx_MLD]
-#     idx_1_5_MLD = np.searchsorted(z, 1.5*MLD)
-#     
-#     if idx_1_5_MLD == len(z) or idx_1_5_MLD==idx_MLD or idx_MLD==0:
-#         return np.nan
-#
-#     if idx_1_5_MLD - idx_MLD < 3:
-#         return np.nan
-#
-#     z_1_5 = z[:idx_1_5_MLD]
-#     y_1_5 = y[:idx_1_5_MLD]
-#     
-#     return 1 - np.std(y_ML)/np.std(y_1_5)
+def quality_index(MLD, y, z, interpolation=False):
+    z = if_masked_to_array(z)
+    y = if_masked_to_array(y)
+    if interpolation:      
+        zz = np.array([13, 18, 38, 48, 58, 68, 73, 84, 90, 102, 114, 
+                    120, 131, 136, 141, 146, 156, 161, 166, 171])
+        z, y = interpolate(z, y, zz, True)
+        
+    idx_MLD = np.searchsorted(z, MLD)
+    z_ML = z[:idx_MLD]
+    y_ML = y[:idx_MLD]
+    idx_1_5_MLD = np.searchsorted(z, 1.5*MLD)
+    
+    if idx_1_5_MLD == len(z) or idx_1_5_MLD==idx_MLD or idx_MLD==0:
+        return np.nan
+
+    if idx_1_5_MLD - idx_MLD < 3:
+        return np.nan
+
+    z_1_5 = z[:idx_1_5_MLD]
+    y_1_5 = y[:idx_1_5_MLD]
+    
+
+    return 1 - np.std(y_ML)/np.std(y_1_5)
+
+def quality_index_row(row, y, z):
+    MLD = row.D1
+
+    z = z[np.isfinite(y)]
+    y = y[np.isfinite(y)]
+    
+    zz = np.linspace(0, max(z), int(max(z)))
+    z, y = interpolate(z, y, zz, True)
+
+    idx_MLD = np.searchsorted(z, MLD)
+    z_ML = z[:idx_MLD]
+    y_ML = y[:idx_MLD]
+    idx_1_5_MLD = np.searchsorted(z, 1.8*MLD)
+
+    z_1_5 = z[:idx_1_5_MLD]
+    y_1_5 = y[:idx_1_5_MLD
+
+    return 1 - np.std(y_ML)/np.std(y_1_5)
+
 #
 #
 # print('Generating Pool arguments...')
@@ -121,16 +142,12 @@ def delta_alpha(row):
     return delta_alpha
 
 
-# ddf = dd.from_pandas(df_ci, npartitions=10)
+ddf = dd.from_pandas(df_ci, npartitions=10)
 # series = ddf.apply(G_alpha, axis=1, meta=('x', 'f8'))  
 # series = series.compute()
 # series.to_csv(data_dir / 'SHDR_fit' / 'aux' / 'G05.csv')
-#
+
+series = ddf.apply(quality_index_row)
 
 
-from multitaper import MTSpec
-nw = 3.5
-kspec = 8
-dt = 5/60/60/23
-x = df_ci.D1.to_numpy()
-psd = MTSpec(x=x, nw=nw, kspec=kspec, dt=dt, iadapt=0)
+
