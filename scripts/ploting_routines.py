@@ -366,3 +366,34 @@ def plot_interpolation(z, y, z_int, y_int):
     ax.set_ylabel('Depth (mb)')
     fig.tight_layout()
     plt.show()
+
+
+def interact_profile(data_chain, fit_chain, range_dates, dn=24):
+    slice_ = slice(*range_dates, dn)
+    temp_chain_range = data_chain.temp.loc[slice_].data
+    date_chain_range = data_chain.date.loc[slice_].data
+    fit_chain_range = fit_chain.loc[slice_]
+    
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+    N = len(date_chain_range)
+    
+    int_wdgt = IntSlider(
+    description='Number:',
+    value=0,
+    min=0, max=N-1, step=1,
+    layout = Layout(width='100%'))
+    
+    zz = np.linspace(0, 200, 300)
+
+    
+    def plot_(i):
+        fig = plt.figure(figsize=(4, 4.6875))
+        plt.scatter(temp_chain_range[i], data_chain.depth, marker='o', fc='None', ec=colors[1], s=24)
+        plt.plot(fit_function(zz, fit_chain_range, i), zz, lw=1)
+        plt.title(np.datetime_as_string(date_chain_range[i], unit='s'))
+        plt.ylim(200, 0)
+        plt.show()
+        del fig
+        
+    interact(plot_, i=int_wdgt)

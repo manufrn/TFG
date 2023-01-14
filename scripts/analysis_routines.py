@@ -199,13 +199,14 @@ def mean_and_std(df_fit, variable):
     return variable.mean(), variable.std()
 
 
-def distance(df_fit, variable, n, value):
+def distance(df_fit, variable, n, value, period=[None, None]):
     '''Given variable of df_fit, return the locs where the diference between
     slices [n:] - [:-n] in that variable are greater than value.
     '''
-    array = df_fit[variable].to_numpy()
+    slice_ = slice(*period)
+    array = df_fit[variable].loc[slice_].to_numpy()
     locs = np.where(abs(array[n:] - array[:-n]) > value)[0]
-    ratio = len(locs)/len(df_fit)
+    ratio = len(locs)/len(array)
     return locs, ratio
                     
 
@@ -249,22 +250,6 @@ def interpolate(z, y, z_values, insert=False):
         y = y_values
     return z, y
 
-def find_MLD_threshold(temp, pres, threshold=0.2, interpolation=True):
-    temp_loc = if_masked_to_array(temp)
-    pres_loc = if_masked_to_array(pres)
-    
-    if interpolation:
-        zz = np.linspace(np.min(pres_loc), np.max(pres_loc), 200)
-        pres_loc, temp_loc = interpolate(pres_loc, temp_loc, zz)
-
-    dif = temp_loc[0] - temp_loc
-    a = np.searchsorted(dif, threshold)
-
-    if a == len(pres_loc):
-        MLD = pres_loc[-1]
-    else:
-        MLD = pres_loc[a]
-    return MLD
 
 def print_component(fit, G05, comp):
     amplitude = [fit.D1.A.loc[comp], fit.D1.A_ci.loc[comp], fit.a2.A.loc[comp], fit.a2.A_ci.loc[comp],

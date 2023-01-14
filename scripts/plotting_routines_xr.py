@@ -8,7 +8,10 @@ import matplotlib.dates as mdates
 from datetime import datetime, timedelta
 from analysis_routines import *
 from IPython.display import Video
+from ipywidgets import Layout, interact, IntSlider
 from scipy.stats import chi2
+from statsmodels.tsa.stattools import acf, adfuller, ccf, ccovf
+from scipy.signal import find_peaks
 from config import data_dir, reports_dir
 
 
@@ -83,6 +86,7 @@ def plot_arbitrary_variable(variable, date=None, period=[None, None], ylim=None,
     if ylim is not None:
         ax.set_ylim(*ylim)
 
+    ax.set_xlim(np.min(date), np.max(date))
 
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
@@ -615,3 +619,57 @@ def plot_multiple_profiles_ax(df, data, date_i, ylim=None):
     fig.tight_layout()   
 
     plt.show()
+
+
+def interact_profile(data_chain, fit_chain, range_dates, dn=24):
+    slice_ = slice(*range_dates, dn)
+    temp_chain_range = data_chain.temp.loc[slice_].data
+    date_chain_range = data_chain.date.loc[slice_].data
+    fit_chain_range = fit_chain.loc[slice_]
+    
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+    N = len(date_chain_range)
+    
+    int_wdgt = IntSlider(
+    description='Number:',
+    value=0,
+    min=0, max=N-1, step=1,
+    layout = Layout(width='100%'))
+    
+    zz = np.linspace(0, 200, 300)
+
+    
+    def plot_(i):
+        fig = plt.figure(figsize=(4, 4.6875))
+        plt.scatter(temp_chain_range[i], data_chain.depth, marker='o', fc='None', ec=colors[1], s=24)
+        plt.plot(fit_function(zz, fit_chain_range, i), zz, lw=1)
+        plt.title(np.datetime_as_string(date_chain_range[i], unit='s'))
+        plt.ylim(200, 0)
+        plt.show()
+        del fig
+        
+    interact(plot_, i=int_wdgt)
+
+def lag_correlation(var1, var2, period=[None, None]):
+    slice_ = slice(*period)
+    ccf_12 = ccf(var1[slice_], var2[slice_], adjusted=False)
+    date = var1[slice_].index.to_numpy()
+    lag_hours = np.array(np.array(date - date[0], dtype='timedelta64[s]'), dtype='int')/3600
+
+    fig, ax = plt.subplots()
+    ax.plot(lag_hours, ccf_12)
+    ax.set_xlabel('lag (h)')
+    ax.set_ylabel('correlation')
+    
+    dt = date[1] - date[0]
+    dt = np.timedelta64(dt, 's')/np.timedelta64(1, 's')
+    max_ccf = np.argmax(ccf_12)*dt/60/60
+    min_ccf = np.argmin(ccf_12)*dt/60/60
+    peaks = find_peaks(ccf_12, height=0.005, prominence=0.08)[0]
+    print(lag_hours[peaks])
+
+    ax.axvline(max_ccf, ls='--', c='grey')
+    ax.axvline(min_ccf, ls='--', c='grey')
+    print(min_ccf)
+    print(max_ccf)

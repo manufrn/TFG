@@ -90,6 +90,7 @@ def multitapping_spectrum(x, dt, n_smooth=None, nw=3.5, kspec=4):
 
     if n_smooth is None:
         dof = spectrum.se[0]
+
     else:
         psd = smooth(np.squeeze(psd), n_smooth)
         freqs = freq[n_smooth//2:-n_smooth//2+1]
@@ -97,7 +98,7 @@ def multitapping_spectrum(x, dt, n_smooth=None, nw=3.5, kspec=4):
 
     del spectrum
 
-    return freqs, psd, dof
+    return freq, psd, dof
 
 
 def smooth_spectrum(freq, pxx, dof, n_smooth):
@@ -140,6 +141,18 @@ def lowpass_filter(signal, date, sampling_rate, highcut, order=4):
     # filtered_signal = filtered_signal[1000:-500]
     series_filtered_signal = pd.Series(filtered_signal, index=date)
     return series_filtered_signal
+
+def highpass_filter(signal, date, sampling_rate, lowcut, order=4):
+    # signal = np.pad(signal, (500, 500), 'constant', constant_values=(0, 0))
+    nyq = 0.5 * sampling_rate
+    high = lowcut / nyq
+    sos = butter(order, high, btype='highpass', output='sos', analog=False)
+
+    filtered_signal = sosfiltfilt(sos, signal)
+    # filtered_signal = filtered_signal[1000:-500]
+    series_filtered_signal = pd.Series(filtered_signal, index=date)
+    return series_filtered_signal
+
 
 
 
