@@ -647,7 +647,6 @@ def interact_profile(data_chain, fit_chain, range_dates, dn=24):
         plt.title(np.datetime_as_string(date_chain_range[i], unit='s'))
         plt.ylim(200, 0)
         plt.show()
-        del fig
         
     interact(plot_, i=int_wdgt)
 
