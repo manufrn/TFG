@@ -68,7 +68,7 @@ def complete_plot(temp, time, power, period, coi, sig95, levels, dt):
     ax1.plot(time, temp, 'k', lw=1)
 
     ax2.contourf(time, np.log2(period), np.log2(power), np.log2(levels),
-                extend='both', cmap='viridis')
+                extend='both', cmap='RdBu_r')
     
     extent = [time.min(), time.max(), min(period), max(period)]
     
@@ -183,6 +183,8 @@ def wavelet_power_spectrum(variable, date, period=[None, None, 6], ylim=None, no
 
 
 
+    # mother = pycwt.Morlet(6)
+    # mother = pycwt.Paul(4)
     mother = pycwt.Morlet(6)
     dt = np.asarray((date[1] - date[0]), dtype='timedelta64[s]').item().total_seconds()
     dj = 0.25

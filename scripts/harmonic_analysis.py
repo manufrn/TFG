@@ -86,24 +86,24 @@ def windowed_spectrum(x, dt, window_time, n_smooth):
 
 def multitapping_spectrum(x, dt, n_smooth=None, nw=3.5, kspec=4):
     spectrum = MTSpec(x=x, nw=nw, kspec=kspec, dt=dt, iadapt=0)
-    freq, psd = spectrum.rspec()
+    freqs, psd = spectrum.rspec()
 
     if n_smooth is None:
         dof = spectrum.se[0]
 
     else:
         psd = smooth(np.squeeze(psd), n_smooth)
-        freqs = freq[n_smooth//2:-n_smooth//2+1]
+        freqs = smooth(np.squeeze(freqs), n_smooth)
         dof = spectrum.se[0]*n_smooth
 
     del spectrum
 
-    return freq, psd, dof
+    return freqs, psd, dof
 
 
 def smooth_spectrum(freq, pxx, dof, n_smooth):
     pxx_s = smooth(pxx, n_smooth)
-    freq_s = freq[n_smooth//2:-n_smooth//2+1]
+    freq_s = smooth(freq, n_smoth)
     dof_s = dof*n_smooth
     return freq_s, pxx_s, dof_s
 
@@ -264,4 +264,3 @@ class column_coefs:
             coef = coef[coef['A'] > coef['A_ci']]
             coef = coef[coef['PE'] > 1]
             setattr(self, 'd' + str(depth), coef)        
-
