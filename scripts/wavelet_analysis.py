@@ -1,15 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pycwt
-import sys
 import xarray as xr
 from datetime import datetime, timedelta
 from analysis_routines import *
-from harmonic_analysis import lowpass_filter, smooth
 from config import data_dir
 import matplotlib.gridspec as gs
-from scipy.signal.windows import boxcar
-from scipy.stats import chi2
 
 def detrend_and_normalize(temp, time):
     pseudo_time = range(len(temp))
@@ -105,11 +101,11 @@ def new_complete_plot(temp, time, power, period, coi, sig95, levels, glbl_power,
 
     period /= 60
     ax2 = fig.add_subplot(gs[1, :2], sharex=ax1)
-    ax2.contourf(time, np.log2(period), np.log2(power), np.log2(levels),
+    im = ax2.contourf(time, np.log2(period), np.log2(power), np.log2(levels),
                 extend='both', cmap='viridis')
     extent = [time.min(), time.max(), min(period), max(period)]
     
-    ax2.contour(time, np.log2(period), sig95, [-99, 1], colors='k', linewidths=0.5,
+    ax2.contour(time, np.log2(period)[10:], sig95[10:], [-99, 1], colors='k', linewidths=0.5,
                extent=extent)
 
     # dt = ntimedelta64(dt, 's')
@@ -183,8 +179,6 @@ def wavelet_power_spectrum(variable, date, period=[None, None, 6], ylim=None, no
 
 
 
-    # mother = pycwt.Morlet(6)
-    # mother = pycwt.Paul(4)
     mother = pycwt.Morlet(6)
     dt = np.asarray((date[1] - date[0]), dtype='timedelta64[s]').item().total_seconds()
     dj = 0.25
@@ -195,14 +189,18 @@ def wavelet_power_spectrum(variable, date, period=[None, None, 6], ylim=None, no
 
     power, scales, period, coi, fft_power, fft_freqs = wavelet_spectrum(variable_norm, mother,
                                                                         dt, dj)
+
+    # power /= scales[:, None]
     
     sig95, glbl_power, glbl_signif, fft_theor = significance(variable_norm, power, mother, dt, scales, var)
 
     power /= scales[:, None]
 
-    levels = np.array([0.0625, 0.125, 0.25, 0.5, 1, 2, 4, 8])/norm_levels
+    # levels = np.array([0.25, 0.5, 1, 2, 4, 8])/norm_levels
+    levels = np.linspace(0.25, 8, 60)/norm_levels
+    # levels = np.array([0.0625, 0.125, 0.25, 0.5, 1, 2, 4, 8])/norm_levels
     new_complete_plot(variable, date_seconds, power, period, coi, sig95, levels, glbl_power, glbl_signif, fft_theor, fft_freqs, fft_power, var, ylim=ylim)
-
+    return power, period, levels
     
 if __name__ == '__main__':
      
@@ -236,7 +234,6 @@ if __name__ == '__main__':
     # temp_norm = temp
     var = temp.std()**2
 
-    # temp = smooth(temp, 3)
 
 
     power, scales, period, coi, fft_power, fft_freqs = wavelet_spectrum(temp_norm, mother,

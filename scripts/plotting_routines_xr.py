@@ -60,11 +60,14 @@ def plot_fit_variable(df, variable, period=None, ylim=None, xlim=None, plot=True
     else:
         return fig, ax
 
-def plot_arbitrary_variable(variable, date=None, period=[None, None], ylim=None, type='scatter'):
+def plot_arbitrary_variable(variable, date=None, period=[None, None], ylim=None, kind='scatter'):
     if date is None:
         slice_ = slice(*period)
-        variable = variable[slice_]
-        date = variable[slice_].index
+        variable = variable.loc[slice_]
+        if type(variable) is pd.Series:
+            date = variable.loc[slice_].index
+        elif type(variable) is xr.DataArray:
+            date = variable.loc[slice_].date
 
     else:
         slice_ = slice(*period)
@@ -77,10 +80,10 @@ def plot_arbitrary_variable(variable, date=None, period=[None, None], ylim=None,
     minor_locator = mdates.AutoDateLocator(minticks=6)
 
     fig, ax = plt.subplots(figsize=(7, 3.75))
-    if type=='scatter':
+    if kind=='scatter':
         ax.scatter(date, variable, s=8)
 
-    elif type=='plot':
+    elif kind=='plot':
         ax.plot(date, variable)
 
     if ylim is not None:

@@ -59,9 +59,6 @@ def plot_profile_fit(df, temp, depth, loc, save=False):
     '''Plot measured vertical profile and fit for measure at loc
     '''
 
-    if isinstance(loc, datetime):
-        try:
-            loc = date_to_idx(df['date'], loc)
 
 
     temp_loc = if_masked_to_array(temp[loc])
