@@ -60,7 +60,7 @@ def plot_fit_variable(df, variable, period=None, ylim=None, xlim=None, plot=True
     else:
         return fig, ax
 
-def plot_arbitrary_variable(variable, date=None, period=[None, None], ylim=None, kind='scatter'):
+def plot_arbitrary_variable(variable, date=None, period=[None, None], ylim=None, kind='scatter', lw=None):
     if date is None:
         slice_ = slice(*period)
         variable = variable.loc[slice_]
@@ -79,12 +79,15 @@ def plot_arbitrary_variable(variable, date=None, period=[None, None], ylim=None,
     formatter = mdates.ConciseDateFormatter(locator)
     minor_locator = mdates.AutoDateLocator(minticks=6)
 
-    fig, ax = plt.subplots(figsize=(7, 3.75))
+    fig, ax = plt.subplots(figsize=(9.2, 3.75))
     if kind=='scatter':
         ax.scatter(date, variable, s=8)
 
     elif kind=='plot':
-        ax.plot(date, variable)
+        if lw is None:
+            ax.plot(date, variable)
+        else: 
+            ax.plot(date, variable, lw=lw)
 
     if ylim is not None:
         ax.set_ylim(*ylim)
@@ -572,6 +575,7 @@ def plot_D1_and_G005(D1, G005, period=[None, None], xlim=None, ylim=None, save=N
     ax2.plot(date, G005_, color=colors[1])
     ax2.tick_params(axis='y', colors=colors[1], which='both')
     ax2.set_ylabel('$G_{0.05}$', color=colors[1])  # we already handled the x-label with ax1
+    fig.tight_layout()
     plt.show()
 
 def plot_multiple_profiles_ax(df, data, date_i, ylim=None):

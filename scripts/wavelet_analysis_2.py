@@ -53,6 +53,7 @@ def significance(signal, power, mother, dt, scales):
     glbl_signif, tmp = pycwt.significance(var, dt, scales, 1, alpha,
                                         significance_level=0.95, dof=dof,
                                         wavelet=mother)
+
     return sig95, glbl_power, glbl_signif, fft_theor
 
 
@@ -172,6 +173,8 @@ def wavelet_spectrum_and_significance(signal, date, mother=None, period=[None, N
 
     # levels = np.array([0.25, 0.5, 1, 2, 4, 8])/norm_levels
     levels = np.linspace(0.25, 8, 60)/norm_levels
+
+    return power, period, coi, sig95
     
 
 def wavelet_power_spectrum(variable, date, period=[None, None, 6], ylim=None, norm_levels=2**7):
