@@ -493,7 +493,7 @@ def plot_spectrum(freqs, pxx, dof, x_units, y_units=None, xlim=None, ylim=None, 
 
 
 def plot_column_oscilation(column_coefs, component, mld_coef, delta05_coef, pos1, pos2, x_arrow, 
-                           ylim=None):
+                           ylim=None, rel=False):
     x = []
     ci = []
     depths = column_coefs.depths
@@ -505,12 +505,21 @@ def plot_column_oscilation(column_coefs, component, mld_coef, delta05_coef, pos1
     delta_mean = delta05_coef.attrs['mean']
 
     delta_ampl = delta05_coef.loc[component]['A']
+   
     for depth in depths:
-        coef = getattr(column_coefs, 'd' + str(depth))
-        value = coef.loc[component]['A']
-        confidence = coef.loc[component]['A_ci']
+        if not rel:
+            coef = getattr(column_coefs, 'd' + str(depth))
+            value = coef.loc[component]['A']
+            confidence = coef.loc[component]['A_ci']
+
+        elif rel:
+            coef = getattr(column_coefs, 'd' + str(depth))
+            value = getattr(column_coefs, 'd' + str(depth) + 'rel')
+            confidence = 0
+            
         ci.append(confidence)
         x.append(value)
+
         
     fig, ax = plt.subplots()
     ax.scatter(x, depths)

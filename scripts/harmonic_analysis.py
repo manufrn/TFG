@@ -154,8 +154,6 @@ def highpass_filter(signal, date, sampling_rate, lowcut, order=4):
     return series_filtered_signal
 
 
-
-
 #### UTIDE ####
 
 def coef_dataframe(value, date=None, period=[None, None], n_smooth=None, lat=43.789):
@@ -250,12 +248,23 @@ class column_coefs:
     def __init__(self, depths):
         self.depths = depths
 
-    def compute(self, data, period=[None, None, 6], lat=43.789):
+    def compute(self, data, period=[None, None, 6], lat=43.789, rel=False):
+
+        osc = []
+        conf = []
         slice_ = slice(*period)
         for depth in self.depths:
             temp = data.temp.sel(date=slice_, depth=depth)
             coef = coef_dataframe(temp, period=period, lat=lat)
             setattr(self, 'd' + str(depth), coef)
+            osc.append(coef.loc['M2']['A'])
+            conf.append(coef.loc['M2']['A_ci'])
+            if rel:
+                relative_disp = coef.loc['M2']['A']/temp.mean()
+                setattr(self, 'd' + str(depth) + 'rel', relative_disp)
+
+        return np.asarray(osc), np.asarray(conf)
+
             
     def clean(self):
         for depth in self.depths:

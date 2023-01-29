@@ -47,6 +47,7 @@ with netCDF4.Dataset(output_path, mode='w', format='NETCDF4') as ds:
     temp[:, :] = temp_
     date[:] = date_
     pres[:] = pres_ 
+    sal[:] = sal_
 
 print(f'Completed. Time series saved in {output_path}')
 #

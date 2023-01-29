@@ -14,7 +14,7 @@ def detrend_and_normalize(signal):
     std = signal_notrend.std()  # standard deviation
     var = std ** 2  # variance
     signal_norm = signal_notrend / std
-    return signal_norm, var
+    return signal_norm
 
 
 def power_of_two(target):
@@ -145,7 +145,6 @@ def new_complete_plot(signal, time, power, period, coi, sig95, levels, glbl_powe
     plt.setp(ax3.get_yticklabels(), visible=False)
 
     fig.tight_layout()
-    # fig.savefig('Hey.png', dpi=100)
     plt.show()
 
 
@@ -188,22 +187,6 @@ def wavelet_power_spectrum(variable, date, period=[None, None, 6], ylim=None, no
     elif isinstance(variable, pd.Series):
         variable = variable.loc[slice_].to_numpy()
         date = date.loc[slice_].to_numpy()
-
-    elif isinstance(variable, np.ndarray):
-        if period[0] is None:
-            i_0 = 0
-
-        else:   
-            i_0 = date.get_loc(period[0])
-
-        if period[1] is None:
-            i_f = len(variable)
-
-        else:
-            i_f = date.get_loc(period[1])
-        date = date[i_0:i_f:period[2]].to_numpy()
-        variable = variable[i_0:i_f:period[2]]
-
 
     mother = pycwt.Morlet(6)
     dt = np.asarray((date[1] - date[0]), dtype='timedelta64[s]').item().total_seconds()
