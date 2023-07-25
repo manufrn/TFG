@@ -11,6 +11,7 @@ from analysis_routines import *
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
 pbar = ProgressBar()                
+
 pbar.register()
 
 print('Loading time series...')
@@ -19,8 +20,8 @@ data_chain = load_time_series_xr('processed/AGL_20181116_chain_xrcompatible.nc')
 # mld_thrs_02 = pd.read_csv(data_dir / 'SHDR_fit/aux/MLD_trsh_02_i.csv')
 
 
-# df_c = load_SHDR_fit('optimal_server_fit/AGL_20181116_fit_fc.csv')
-df_s = load_SHDR_fit('optimal_server_fit/AGL_20181116_fit_s.csv')
+df_c = load_SHDR_fit('optimal_server_fit/AGL_20181116_fit_fc.csv')
+# df_s = load_SHDR_fit('optimal_server_fit/AGL_20181116_fit_s.csv')
 
 
 def find_MLD_threshold(y, z, threshold=0.2, interpolation=True):
@@ -100,7 +101,7 @@ def quality_index_mp(data_chain, mld, output_path):
     df_result.to_csv(output_path, index=False)
     print(f'Results saved to {output_path}')
 
-quality_index_mp(data_chain, df_s.D1, data_dir / 'SHDR_fit/aux' / 'QI_is_20181116.csv')
+# quality_index_mp(data_chain, df_s.D1, data_dir / 'SHDR_fit/aux' / 'QI_is_20181116.csv')
 
 
 # G_alpha
@@ -151,12 +152,11 @@ def delta_alpha(row):
     return delta_alpha
 
 
-# ddf = dd.from_pandas(df_s, npartitions=10)
-# series = ddf.apply(G_alpha, axis=1, meta=('x', 'f8'))  
-# series = series.compute()
-# series.to_csv(data_dir / 'SHDR_fit' / 'aux' / 'G05_s.csv')
+ddf = dd.from_pandas(df_c, npartitions=10)
+series = ddf.apply(G_alpha, axis=1, meta=('x', 'f8'))  
+series = series.compute()
+series.to_csv(data_dir / 'SHDR_fit' / 'aux' / 'G05_c.csv')
 
-# series = ddf.apply(quality_index_row)
 
 
 

@@ -338,6 +338,7 @@ def fit_profile(z, y, args, previous_result=None, b3_reference_lims=None):
         z = np.asarray(z[z.mask==False])
         y = np.asarray(y[y.mask==False])
 
+    
     z = z[np.isfinite(y)]
     y = y[np.isfinite(y)]
 

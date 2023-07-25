@@ -127,8 +127,12 @@ def extract_data_from_file(args, sal=False):
                     pres = ds.variables['depth'][:]
                 except:
                     pres = ds.variables['pres'][:]
+
+                
                 temp = ds.variables['temp'][:]
                 date = ds.variables['date'][:]
+                if len(pres.shape) != 2:
+                    pres = np.broadcast_to(pres, temp.shape)
 
                 return lat, lon, pres, temp, date
 
@@ -541,6 +545,7 @@ def main():
         if args.resume_fit is not None:
             results_fit = saved_results
         else:
+            print(pres[0], temp[0])
             results_fit = [fit_profile(pres[0], temp[0], args)]
         
         # only continous

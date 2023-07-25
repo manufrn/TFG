@@ -92,7 +92,7 @@ class Wavelet:
         self.wavelet_spectrum()
         self.significance()
 
-    def plot_spectrum_ax(self, ax, norm_levels=2**7, skip=10):
+    def plot_spectrum_ax(self, ax, norm_levels=2**7, skip=10, lw=0.5):
         date = self.date.copy()
         period = self.period.copy()
 
@@ -106,7 +106,7 @@ class Wavelet:
         extent = [date.min(), date.max(), min(period), max(period)]
 
         ax.contour(date, np.log2(period)[skip:], self.sig95[skip:],
-                    [-99, 1], colors='k', linewidths=0.5, extent=extent)
+                    [-99, 1], colors='k', linewidths=lw, extent=extent)
 
         dt = date[1] - date[0]
         ax.fill(np.concatenate([date, date[-1:] + dt, date[-1:] + dt,
@@ -125,7 +125,7 @@ class Wavelet:
         ax.set_ylabel('Periodo (min)')
 
 
-    def complete_plot(self, units=None, skip=10, norm_levels=2**7):
+    def complete_plot(self, units=None, skip=10, norm_levels=2**7, hlines=None):
         date = self.date.copy()
         period = self.period.copy()
 
@@ -166,7 +166,7 @@ class Wavelet:
         ax2.set_yticklabels(yticks)
         ax2.set_ylabel('Periodo (min)')
         ax2.set_title('b) Wavelet power spectrum')
-
+        
         
         ax3 = fig.add_subplot(gs[1, 2], sharey=ax2)
         ax3.plot(self.glbl_signif, np.log2(period), 'k--')
@@ -182,6 +182,11 @@ class Wavelet:
         ax3.set_yticklabels(yticks)
         ax3.set_xlabel(u'Power (ºC\u00b2)')
         plt.setp(ax3.get_yticklabels(), visible=False)
+
+        if hlines is not None:
+            for i in hlines:
+                ax3.axhline(i, color='k', lw=2)
+
 
         fig.tight_layout()
         plt.show()

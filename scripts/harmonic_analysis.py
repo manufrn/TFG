@@ -15,6 +15,7 @@ def smooth(y, n, mode='valid'):
     y_smoothed = np.convolve(y, boxcar(n), mode=mode) / n
     return y_smoothed
 
+
 def detrend(x):
     n = len(x)
     t = np.arange(n)

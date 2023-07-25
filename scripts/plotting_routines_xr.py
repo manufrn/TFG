@@ -15,7 +15,7 @@ from scipy.signal import find_peaks
 from config import data_dir, reports_dir
 
 
-def plot_fit_variable(df, variable, period=None, ylim=None, xlim=None, plot=True, wide=True):
+def plot_fit_variable(df, variable, period=[None, None], ylim=None, xlim=None, plot=True, wide=True):
     '''Plot given fit variable (e.g D1, a1, ...) for time between lims and 
     with given interval.
     '''
@@ -78,6 +78,7 @@ def plot_arbitrary_variable(variable, date=None, period=[None, None], ylim=None,
     locator = mdates.AutoDateLocator(minticks=4, maxticks=None)
     formatter = mdates.ConciseDateFormatter(locator)
     minor_locator = mdates.AutoDateLocator(minticks=6)
+    
 
     fig, ax = plt.subplots(figsize=(9.2, 3.75))
     if kind=='scatter':
@@ -178,7 +179,6 @@ def plot_RMS_fit(df, temp, depth, loc):
     fig.tight_layout()
     plt.show()
 
-
 def plot_multiple_profiles(df, data, dates_i, xlim=None):
     
     n = len(dates_i)
@@ -250,16 +250,16 @@ def animate_profile_evolution(df, data, filename, optional_mld=None, xlim=None,
 
     fig, ax = plt.subplots(figsize=(6.5, 6))
     ax.set_xlim(11, 16)
-    ax.set_xlabel('Temperature (ºC)')
-    ax.set_ylabel('Depth (db)')
-    ax.set_ylim(np.max(pres) + 3, 0)
+    ax.set_xlabel('Temperatura ($^{\mathrm{o}}$C)')
+    ax.set_ylabel('Profundidad (dbar)')
+    ax.set_ylim(182, 0)
     if xlim is None:
         ax.set_xlim(11, 16)
     else:
         ax.set_xlim(*xlim)
     fig.tight_layout()
 
-    points, = ax.plot([], [], 'o', mfc='None', mec='tab:red')
+    points, = ax.plot([], [], 'o', mfc='None', mec='tab:red', markersize=6)
     line, = ax.plot([], [], c='tab:blue')
     mld, = ax.plot([], [], c='grey', ls='--')
     if isinstance(optional_mld, np.ndarray):

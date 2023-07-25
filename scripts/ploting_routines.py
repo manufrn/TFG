@@ -61,6 +61,7 @@ def plot_profile_fit(df, temp, depth, loc, save=False):
 
 
 
+
     temp_loc = if_masked_to_array(temp[loc])
     pres_loc = if_masked_to_array(depth[loc])
 
@@ -174,15 +175,15 @@ def animate_profile_evolution(df, tems, depth, filename, optional_mld=None,
     numbers = np.linspace(start_loc, final_loc, number_plots, dtype='int')
     zz = np.linspace(0, 175, 300)
 
-    fig, ax = plt.subplots(figsize=(6.5, 6))
+    fig, ax = plt.subplots(figsize=(12, 13))
     ax.set_xlim(11, 16)
-    ax.set_xlabel('Temperature (ºC)')
-    ax.set_ylabel('Depth (db)')
-    ax.set_ylim(np.max(depth) + 3, 0)
+    ax.set_xlabel('Temperatura ($^{\mathrm{o}}$C)')
+    ax.set_ylabel('Profundidad (dbar)')
+    ax.set_ylim(182, 0)
     ax.set_xlim(11, 16)
     fig.tight_layout()
 
-    points, = ax.plot([], [], 'o', mfc='None', mec='tab:red')
+    points, = ax.plot([], [], 'o', mfc='None', mec='tab:red', marksersize=28)
     line, = ax.plot([], [], c='tab:blue')
     mld, = ax.plot([], [], c='grey', ls='--')
     if isinstance(optional_mld, np.ndarray):
